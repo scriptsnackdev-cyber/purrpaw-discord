@@ -29,6 +29,7 @@
     "google-tts-api": "^2.0.2",
     "gtts": "^0.2.1",
     "libsodium-wrappers": "^0.8.2",
+    "node-cron": "^4.2.1",
     "openai": "^6.33.0",
     "opusscript": "^0.0.8",
     "play-dl": "^1.9.7"

@@ -18,7 +18,10 @@ async function getFortuneAI(prompt, userMessage) {
                 ],
                 temperature: 0.7
             },
-            { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
+            { 
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                timeout: 30000 
+            }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
@@ -49,7 +52,8 @@ async function getChatAI(messages) {
                     'Content-Type': 'application/json',
                     'HTTP-Referer': 'https://github.com/purrpaw',
                     'X-Title': 'PurrPaw Discord Bot'
-                } 
+                },
+                timeout: 45000 // เพิ่มเวลาให้แชทนิดหน่อยเมี๊ยว🐾 45 วินาที 
             }
         );
         return response.data.choices[0].message.content;
@@ -160,7 +164,8 @@ async function getInitialAI(userPrompt, guildName = "Unknown Server") {
                     'Content-Type': 'application/json',
                     'HTTP-Referer': 'https://github.com/purrpaw',
                     'X-Title': 'PurrPaw Discord Bot'
-                } 
+                },
+                timeout: 60000 // โหมดออกแบบให้ 60 วินาทีเลยเมี๊ยว🐾 
             }
         );
         return response.data.choices[0].message.content;
@@ -206,7 +211,8 @@ async function getRoleButtonAI(userPrompt) {
                 headers: { 
                     'Authorization': `Bearer ${apiKey}`, 
                     'Content-Type': 'application/json'
-                } 
+                },
+                timeout: 30000
             }
         );
         return response.data.choices[0].message.content;
@@ -244,7 +250,8 @@ async function getSummaryAI(chatBlock) {
                 headers: { 
                     'Authorization': `Bearer ${apiKey}`, 
                     'Content-Type': 'application/json'
-                } 
+                },
+                timeout: 30000
             }
         );
         return response.data.choices[0].message.content;

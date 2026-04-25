@@ -1,5 +1,6 @@
 const { Events } = require('discord.js');
 const supabase = require('../../supabaseClient');
+const { getGuildData } = require('../../utils/guildCache');
 
 module.exports = {
     name: Events.VoiceStateUpdate,
@@ -82,14 +83,17 @@ async function handleVoiceXP(guild, member, seconds) {
 
     // ตรวจสอบเลเวลอัป
     if (newLevel > oldLevel) {
+        // ดึงรางวัลทั้งหมดมาเช็คเมี๊ยว🐾
+        const { data: allRewards } = await supabase.from('voice_level_rewards').select('*').eq('guild_id', guild.id).order('level', { ascending: false });
+        
+        // 1. หารางวัลที่สูงสุดที่เลเวลถึง (รองรับการกระโดดข้ามเลเวลเมี๊ยว🐾)
+        const highestReward = allRewards?.find(r => r.level <= newLevel);
         let newRole;
-        // 1. หารางวัลที่แอดมินตั้ง
-        const { data: reward } = await supabase.from('voice_level_rewards').select('role_id').eq('guild_id', guild.id).eq('level', newLevel).single();
-        if (reward && reward.role_id) {
-            newRole = guild.roles.cache.get(reward.role_id);
+        if (highestReward) {
+            newRole = guild.roles.cache.get(highestReward.role_id);
         }
 
-        // 2. ถ้าไม่มีรางวัล ให้ใช้ชื่อ Sound.LV.XX เมี๊ยว🐾
+        // 2. ถ้าไม่มีรางวัลที่ตั้งไว้ ให้ใช้ชื่อ Sound.LV.XX เมี๊ยว🐾
         if (!newRole) {
             const defaultName = `Sound.LV.${newLevel}`;
             newRole = guild.roles.cache.find(r => r.name === defaultName);
@@ -106,7 +110,6 @@ async function handleVoiceXP(guild, member, seconds) {
 
         // 3. ลบยศเก่า (สไตล์เดียวกับแชท)
         try {
-            const { data: allRewards } = await supabase.from('voice_level_rewards').select('role_id').eq('guild_id', guild.id);
             const rewardRoleIds = allRewards ? allRewards.map(r => r.role_id) : [];
             const toRemove = member.roles.cache.filter(role => {
                 const isOldLvlString = role.name.startsWith('Sound.LV.') && role.name !== `Sound.LV.${newLevel}`;
@@ -120,9 +123,32 @@ async function handleVoiceXP(guild, member, seconds) {
         if (newRole) {
             try {
                 await member.roles.add(newRole);
-                const channel = member.guild.systemChannel || member.guild.channels.cache.find(c => c.isTextBased());
-                if (channel) channel.send(`🎙️ ยินดีด้วยเมี๊ยวว! <@${member.id}> เลเวลห้องเสียงอัปเป็น **${newLevel}** แล้วและได้รับยศ **${newRole.name}** เมี๊ยว🐾🌸!`);
-            } catch (e) {}
+            } catch (e) { console.error('Error adding voice role:', e); }
+        }
+
+        // 5. ส่งการแจ้งเตือน
+        const { generateLevelUpCard } = require('../../utils/levelCard');
+        const { AttachmentBuilder } = require('discord.js');
+
+        // ดึง Settings เพื่อเช็คพื้นหลังเมี๊ยว🐾 จาก Cache
+        const { settings } = await getGuildData(guild.id);
+        const customBgURL = settings.rank_background_url || null;
+
+        const channel = member.guild.systemChannel || member.guild.channels.cache.find(c => c.isTextBased());
+        if (channel) {
+            try {
+                const avatarURL = member.displayAvatarURL({ extension: 'png', size: 256 });
+                const imageBuffer = await generateLevelUpCard(member.user, newLevel, 'Voice', newRole?.name, member.displayName, avatarURL, customBgURL);
+                const attachment = new AttachmentBuilder(imageBuffer, { name: `voice-levelup-${member.id}.png` });
+                
+                await channel.send({
+                    content: `🎙️ **ยินดีด้วยเมี๊ยววว! <@${member.id}> เลเวลห้องเสียงอัปแล้ว!** 🐾🌸`,
+                    files: [attachment]
+                });
+            } catch (error) {
+                console.error('Error sending voice level card:', error);
+                await channel.send(`🎙️ ยินดีด้วยเมี๊ยวว! <@${member.id}> เลเวลห้องเสียงอัปเป็น **${newLevel}** แล้ว${newRole ? `และได้รับยศ **${newRole.name}**` : ''} เมี๊ยว🐾🌸!`);
+            }
         }
     }
 }

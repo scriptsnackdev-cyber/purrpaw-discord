@@ -1,6 +1,7 @@
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const googleTTS = require('google-tts-api');
 const supabase = require('../supabaseClient');
+const { getGuildData } = require('./guildCache');
 const dayjs = require('dayjs');
 const { OpenAI } = require('openai');
 const { Readable } = require('stream');
@@ -66,9 +67,7 @@ class TTSManager {
         }
 
         try {
-            const { data: guildData } = await supabase.from('guilds').select('settings, balance_thb').eq('id', guildId).single();
-            const settings = guildData?.settings || {};
-            const currentBalance = guildData?.balance_thb || 0;
+            const { settings, balance_thb: currentBalance } = await getGuildData(guildId);
             const today = dayjs().format('YYYY-MM-DD');
             
             const premiumEnabled = settings.tts_premium_enabled || false;
@@ -129,6 +128,8 @@ class TTSManager {
             if (usedPremium) {
                 await supabase.from('tts_usage_logs').insert({ guild_id: guildId, characters_count: text.length, cost_thb: cost });
                 await supabase.from('guilds').update({ balance_thb: currentBalance - cost }).eq('id', guildId);
+                const { invalidateCache } = require('./guildCache');
+                invalidateCache(guildId);
             }
 
             if (dQueue) dQueue.setVolume(oldVolume);

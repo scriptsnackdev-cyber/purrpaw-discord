@@ -47,8 +47,10 @@ module.exports = {
                 .addStringOption(o => o.setName('q3').setDescription('คำถามที่ 3 (ไม่ใส่ก็ได้เมี๊ยว)'))
                 .addStringOption(o => o.setName('q4').setDescription('คำถามที่ 4 (ไม่ใส่ก็ได้เมี๊ยว)'))
                 .addStringOption(o => o.setName('q5').setDescription('คำถามที่ 5 (ไม่ใส่ก็ได้เมี๊ยว)'))
+                .addStringOption(o => o.setName('image_url').setDescription('ลิงก์รูปภาพประกอบ Embed เมี๊ยว'))
                 .addRoleOption(o => o.setName('role').setDescription('Role ที่จะแจกหลังจากอนุมัติเมี๊ยว'))
-                .addRoleOption(o => o.setName('remove-role').setDescription('Role ที่จะดึงออกหลังจากอนุมัติเมี๊ยว')))
+                .addRoleOption(o => o.setName('remove-role').setDescription('Role ที่จะดึงออกหลังจากอนุมัติเมี๊ยว'))
+                .addChannelOption(o => o.setName('approve_channel').setDescription('ห้องสำหรับให้แอดมินกดอนุมัติ (ถ้าโหมดรอตรวจสอบเมี๊ยว)').addChannelTypes(ChannelType.GuildText)))
         .addSubcommand(sub => 
             sub.setName('set')
                 .setDescription('⚙️ ตั้งค่าระบบแบบฟอร์มเมี๊ยว')
@@ -127,6 +129,8 @@ module.exports = {
             const buttonLabel = interaction.options.getString('button');
             const modalTitle = interaction.options.getString('popup_title');
             const mode = interaction.options.getString('mode');
+            const approveChannel = interaction.options.getChannel('approve_channel');
+            const imageUrl = interaction.options.getString('image_url');
             
             const questions = [
                 interaction.options.getString('q1'),
@@ -139,6 +143,15 @@ module.exports = {
             const role = interaction.options.getRole('role');
             const removeRole = interaction.options.getRole('remove-role');
 
+            // ถ้ามีการเลือกห้อง Approve มาด้วย ให้ตั้งค่า Settings ให้เลยเมี๊ยว
+            if (approveChannel) {
+                let { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guildId).single();
+                const settings = guildData?.settings || {};
+                if (!settings.form) settings.form = {};
+                settings.form.approve_channel_id = approveChannel.id;
+                await supabase.from('guilds').update({ settings }).eq('id', guildId);
+            }
+
             const { data: formData, error } = await supabase.from('forms').insert({
                 guild_id: guildId,
                 title,
@@ -148,17 +161,22 @@ module.exports = {
                 modal_questions: questions,
                 role_id: role?.id || null,
                 remove_role_id: removeRole?.id || null,
-                mode
+                mode,
+                image_url: imageUrl
             }).select().single();
 
             if (error) {
                 console.error('Supabase error creating form:', error);
-                return interaction.reply({ content: '❌ สร้างแบบฟอร์มลง Database ไม่สำเร็จเมี๊ยว!', ephemeral: true });
+                return interaction.reply({ 
+                    content: `❌ สร้างแบบฟอร์มลง Database ไม่สำเร็จเมี๊ยว!\n**สาเหตุ:** \`${error.message}\` (ลองเช็ค Table ใน Supabase ดูนะ🐾)`, 
+                    ephemeral: true 
+                });
             }
 
             const embed = new EmbedBuilder()
                 .setTitle(`ฅ^•ﻌ•^ฅ ${title}`)
                 .setDescription(description.replace(/\\n/g, '\n'))
+                .setImage(imageUrl || null)
                 .setColor(0x3B82F6) 
                 .setFooter({ text: 'PurrPaw Verification System 🐾' });
 
@@ -166,10 +184,15 @@ module.exports = {
                 new ButtonBuilder()
                     .setCustomId(`form_open:${formData.id}`)
                     .setLabel(buttonLabel)
-                    .setStyle(ButtonStyle.Primary)
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId(`form_delete:${formData.id}`)
+                    .setLabel('ลบแบบฟอร์มนี้')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🗑️')
             );
 
-            await interaction.reply({ content: '✅ สร้างแบบฟอร์มสำเร็จแล้วเมี๊ยวว!', ephemeral: true });
+            await interaction.reply({ content: '✅ สร้างแบบฟอร์มสำเร็จแล้วเมี๊ยวว!' + (approveChannel ? ` (ตั้งห้องอนุมัติที่ ${approveChannel} ให้ด้วยเมี๊ยว🐾)` : ''), ephemeral: true });
             return await interaction.channel.send({ embeds: [embed], components: [row] });
         }
     }

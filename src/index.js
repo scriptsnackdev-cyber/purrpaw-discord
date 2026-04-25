@@ -7,6 +7,8 @@ const { promisify } = require('util');
 const { Client, Collection, GatewayIntentBits } = require('discord.js');
 const { DisTube, Song } = require('distube');
 const TTSManager = require('./utils/ttsManager');
+const supabase = require('./supabaseClient');
+const { initDailyScheduler } = require('./utils/dailyScheduler');
 
 const execFileAsync = promisify(execFile);
 
@@ -182,9 +184,84 @@ client.distube = new DisTube(client, {
 client.ttsManager = new TTSManager(client);
 
 client.commands = new Collection();
-const handlerFiles = fs.readdirSync('./src/handlers').filter(file => file.endsWith('.js'));
-for (const file of handlerFiles) {
-    require(`./handlers/${file}`)(client);
+// 📂 โหลดคำสั่ง (Commands) จากโฟลเดอร์ย่อยเมี๊ยว🐾
+const commandsPath = path.join(__dirname, 'commands');
+if (fs.existsSync(commandsPath)) {
+    const commandFolders = fs.readdirSync(commandsPath);
+    for (const folder of commandFolders) {
+        const folderPath = path.join(commandsPath, folder);
+        
+        if (fs.lstatSync(folderPath).isDirectory()) {
+            const commandFiles = fs.readdirSync(folderPath).filter(file => file.endsWith('.js'));
+            for (const file of commandFiles) {
+                const filePath = path.join(folderPath, file);
+                const command = require(filePath);
+                if ('data' in command && 'execute' in command) {
+                    client.commands.set(command.data.name, command);
+                }
+            }
+        } else if (folder.endsWith('.js')) {
+            const command = require(folderPath);
+            if ('data' in command && 'execute' in command) {
+                client.commands.set(command.data.name, command);
+            }
+        }
+    }
 }
+
+// 📂 โหลด Handlers เมี๊ยว🐾
+const handlersPath = path.join(__dirname, 'handlers');
+if (fs.existsSync(handlersPath)) {
+    const handlerFiles = fs.readdirSync(handlersPath).filter(file => file.endsWith('.js'));
+    for (const file of handlerFiles) {
+        require(`./handlers/${file}`)(client);
+    }
+}
+
+// ── ระบบจัดการ AI Chat Cleanup & Private Room Cleanup ──
+const { cleanupExpiredSessions } = require('./utils/aiCleanup');
+const { cleanupPrivateRooms, warnPrivateRooms } = require('./utils/privateRoomCleanup');
+
+const { REST, Routes } = require('discord.js');
+
+client.once('clientReady', async () => {
+    console.log(`✅ บอทออนไลน์แล้วเมี๊ยว: ${client.user.tag}`);
+    
+    // 🚀 ระบบอัปเดตคำสั่งอัตโนมัติราย Guild เมี๊ยว🐾
+    try {
+        const { data: allGuilds } = await supabase.from('guilds').select('id');
+        if (allGuilds && allGuilds.length > 0) {
+            const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+            const commandsJSON = Array.from(client.commands.values()).map(c => c.data.toJSON());
+            
+            console.log(`📡 กำลังอัปเดตคำสั่งให้ ${allGuilds.length} เซิร์ฟเวอร์... 🐾`);
+            
+            for (const g of allGuilds) {
+                await rest.put(
+                    Routes.applicationGuildCommands(process.env.CLIENT_ID, g.id),
+                    { body: commandsJSON }
+                ).catch(err => console.error(`[Deploy] Failed for Guild ${g.id}:`, err.message));
+            }
+            console.log('✅ อัปเดตคำสั่งทุกเซิร์ฟเวอร์เรียบร้อยแล้วเมี๊ยวว! ✨');
+        }
+    } catch (err) {
+        console.error('[Deploy] Error:', err);
+    }
+
+    // รัน Cleanup และแจ้งเตือน ทุกๆ 1 นาทีเมี๊ยว🐾
+    setInterval(() => {
+        cleanupExpiredSessions(client);
+        cleanupPrivateRooms(client);
+        warnPrivateRooms(client);
+    }, 1000 * 60);
+    
+    // รันทันทีหนึ่งรอบตอนเปิดบอทเมี๊ยว🐾
+    cleanupExpiredSessions(client);
+    cleanupPrivateRooms(client);
+    warnPrivateRooms(client);
+
+    // เริ่มทำงาน Daily Scheduler เมี๊ยว🐾
+    initDailyScheduler(client);
+});
 
 client.login(process.env.DISCORD_TOKEN);
