@@ -9,6 +9,10 @@ const { DisTube, Song } = require('distube');
 const TTSManager = require('./utils/ttsManager');
 const supabase = require('./supabaseClient');
 const { initDailyScheduler } = require('./utils/dailyScheduler');
+const { registerSystemFonts } = require('./utils/fontHelper');
+
+// 🎨 ลงทะเบียนฟอนต์สำหรับทั้งระบบเมี๊ยว🐾
+registerSystemFonts();
 
 const execFileAsync = promisify(execFile);
 

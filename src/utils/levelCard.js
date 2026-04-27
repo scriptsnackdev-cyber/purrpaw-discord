@@ -2,6 +2,7 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const path = require('path');
 const fs = require('fs');
 const { drawBackground } = require('./canvasHelper');
+const { fontStack, fontStackBold } = require('./fontHelper');
 
 /**
  * Generates a Level Up image card
@@ -60,28 +61,27 @@ async function generateLevelUpCard(user, level, type = 'Chat', roleName = null, 
     // 4. Texts
     const textX = 240;
     const pinkColor = '#FFB6C1';
-    const fontStack = 'bold 42px "Leelawadee UI", Tahoma, sans-serif';
     
     // User Name (Nickname if provided)
     ctx.fillStyle = pinkColor;
     ctx.textAlign = 'left';
-    ctx.font = fontStack;
+    ctx.font = `bold 42px ${fontStackBold}`;
     ctx.fillText(displayName || user.username, textX, 85);
 
     // LEVEL UP Text Badge
     ctx.fillStyle = themeColor;
     drawRoundedRect(ctx, textX, 105, 220, 40, 10);
     ctx.fillStyle = '#1a1a1a';
-    ctx.font = 'bold 22px "Leelawadee UI", Tahoma, sans-serif';
+    ctx.font = `bold 22px ${fontStackBold}`;
     ctx.textAlign = 'center';
     ctx.fillText(`${type.toUpperCase()} LEVEL UP!`, textX + 110, 133);
 
     // Level Number (Big)
     ctx.textAlign = 'right';
     ctx.fillStyle = pinkColor;
-    ctx.font = 'bold 100px "Leelawadee UI", Tahoma, sans-serif';
+    ctx.font = `bold 100px ${fontStackBold}`;
     ctx.fillText(level, 930, 140);
-    ctx.font = 'bold 30px "Leelawadee UI", Tahoma, sans-serif';
+    ctx.font = `bold 30px ${fontStackBold}`;
     ctx.fillText('LEVEL', 930, 55);
 
     // Progress Bar (Full for level up effect)
@@ -99,7 +99,7 @@ async function generateLevelUpCard(user, level, type = 'Chat', roleName = null, 
     // Role / Subtext
     ctx.textAlign = 'left';
     ctx.fillStyle = pinkColor;
-    ctx.font = 'italic 22px "Leelawadee UI", Tahoma, sans-serif';
+    ctx.font = `italic 22px ${fontStack}`;
     if (roleName) {
         ctx.fillText(`🎁 New Role Unlocked: ${roleName}`, textX, 240);
     } else {

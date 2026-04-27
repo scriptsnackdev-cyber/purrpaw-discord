@@ -2,6 +2,7 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const path = require('path');
 const fs = require('fs');
 const { drawBackground } = require('./canvasHelper');
+const { fontStack, fontStackBold } = require('./fontHelper');
 
 /**
  * Generates a Role Announcement image card
@@ -56,19 +57,18 @@ async function generateRoleCard(user, roleName, displayName, avatarURL, customBa
     // 4. Texts
     const textX = 240;
     const pinkColor = '#FFB6C1';
-    const fontStack = '"Leelawadee UI", Tahoma, sans-serif';
     
     // User Name
     ctx.fillStyle = pinkColor;
     ctx.textAlign = 'left';
-    ctx.font = `bold 38px ${fontStack}`;
+    ctx.font = `bold 38px ${fontStackBold}`;
     ctx.fillText(displayName || user.username, textX, 85);
 
     // Badge
     ctx.fillStyle = themeColor;
     drawRoundedRect(ctx, textX, 105, 250, 40, 10);
     ctx.fillStyle = '#1a1a1a';
-    ctx.font = `bold 22px ${fontStack}`;
+    ctx.font = `bold 22px ${fontStackBold}`;
     ctx.textAlign = 'center';
     ctx.fillText(`NEW ROLE GRANTED!`, textX + 125, 133);
 
@@ -80,13 +80,13 @@ async function generateRoleCard(user, roleName, displayName, avatarURL, customBa
     let displayRole = roleName;
     
     // คำนวณขนาดฟอนต์ตามความยาวเมี๊ยว🐾
-    ctx.font = `bold ${fontSize}px ${fontStack}`;
+    ctx.font = `bold ${fontSize}px ${fontStackBold}`;
     let textWidth = ctx.measureText(displayRole).width;
     const maxWidth = 680;
 
     while (textWidth > maxWidth && fontSize > 24) {
         fontSize -= 2;
-        ctx.font = `bold ${fontSize}px ${fontStack}`;
+        ctx.font = `bold ${fontSize}px ${fontStackBold}`;
         textWidth = ctx.measureText(displayRole).width;
     }
 

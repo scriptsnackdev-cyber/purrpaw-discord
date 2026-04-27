@@ -1,19 +1,9 @@
-const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { fontStack, fontStackBold } = require('./fontHelper');
+
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { AttachmentBuilder } = require('discord.js');
-const path = require('path');
-const fs = require('fs');
 const supabase = require('../supabaseClient');
 const { drawBackground } = require('./canvasHelper');
-
-// ลงทะเบียน Font ภาษาไทย
-try {
-    const fontPath = 'C:\\Windows\\Fonts\\tahoma.ttf';
-    if (fs.existsSync(fontPath)) {
-        GlobalFonts.registerFromPath(fontPath, 'ThaiFont');
-    }
-} catch (err) {
-    console.error('Failed to register Thai font:', err);
-}
 
 async function generateRPGImage(players, interaction, actedUserIds = []) {
     const canvas = createCanvas(984, 282);
@@ -31,7 +21,7 @@ async function generateRPGImage(players, interaction, actedUserIds = []) {
         drawRoundedRect(ctx, 20, 20, 944, 242, 15);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 32px ThaiFont, sans-serif';
+        ctx.font = `bold 32px ${fontStackBold}`;
         ctx.fillText('⚔️ สถานะปาร์ตี้', 50, 65);
 
         const avatarSize = 100;
@@ -87,7 +77,7 @@ async function generateRPGImage(players, interaction, actedUserIds = []) {
                 }
 
                 ctx.fillStyle = '#ffffff';
-                ctx.font = '12px ThaiFont, sans-serif';
+                ctx.font = `12px ${fontStack}`;
                 ctx.textAlign = 'center';
                 const finalName = displayName.length > 10 ? displayName.substring(0, 8) + '..' : displayName;
                 ctx.fillText(finalName, x + avatarSize / 2, y + avatarSize + 20);
@@ -98,7 +88,7 @@ async function generateRPGImage(players, interaction, actedUserIds = []) {
         }
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.font = 'italic 14px ThaiFont, sans-serif';
+        ctx.font = `italic 14px ${fontStack}`;
         ctx.textAlign = 'right';
         ctx.fillText('PurrPaw RPG Adventure Engine', 950, 265);
 

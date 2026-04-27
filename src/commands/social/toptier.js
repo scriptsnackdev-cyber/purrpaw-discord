@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, AttachmentBuilder, PermissionFlagsBits } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { drawBackground } = require('../../utils/canvasHelper');
+const { fontStack, fontStackBold } = require('../../utils/fontHelper');
 
 // 🎨 ฟังก์ชันช่วยวาดสี่เหลี่ยมมุมมนเมี๊ยว🐾
 function drawRoundedRect(ctx, x, y, w, h, r) {
@@ -21,24 +22,82 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('toptier')
         .setDescription('🏆 ดูอันดับสุดยอดผู้ใช้งาน (Top Tier) ของเซิร์ฟเวอร์เมี๊ยว🐾')
-        .addStringOption(option => 
-            option.setName('mode')
-                .setDescription('โหมดที่ต้องการดูอันดับ')
-                .setRequired(true)
-                .addChoices(
-                    { name: '💬 แชท (Chat)', value: 'chat' },
-                    { name: '🎙️ ห้องพูดคุย (Speaker)', value: 'speaker' }
+        .addSubcommand(subcommand =>
+            subcommand.setName('view')
+                .setDescription('ดูอันดับสุดยอดผู้ใช้งานเมี๊ยว🐾')
+                .addStringOption(option => 
+                    option.setName('mode')
+                        .setDescription('โหมดที่ต้องการดูอันดับ')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: '💬 แชท (Chat)', value: 'chat' },
+                            { name: '🎙️ ห้องพูดคุย (Speaker)', value: 'speaker' }
+                        )
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand.setName('set-text')
+                .setDescription('⚙️ ตั้งค่าข้อความหัวตารางเมี๊ยว🐾 (สำหรับแอดมิน)')
+                .addStringOption(option => 
+                    option.setName('mode')
+                        .setDescription('โหมดที่ต้องการตั้งค่า')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: '💬 แชท (Chat)', value: 'chat' },
+                            { name: '🎙️ ห้องพูดคุย (Speaker)', value: 'speaker' }
+                        )
+                )
+                .addStringOption(option =>
+                    option.setName('text')
+                        .setDescription('ข้อความที่ต้องการแสดง (ใส่ $text เพื่อคืนค่าเริ่มต้น)')
+                        .setRequired(true)
                 )
         ),
 
     async execute(interaction) {
-        await interaction.deferReply();
-        const mode = interaction.options.getString('mode');
+        const subcommand = interaction.options.getSubcommand();
         const guildId = interaction.guild.id;
 
-        // ดึง Custom Background จาก Guild Settings
+        // --- SUBCOMMAND: SET-TEXT ---
+        if (subcommand === 'set-text') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return interaction.reply({ content: 'งื้อออ เฉพาะแอดมินเท่านั้นที่ตั้งค่าได้นะเมี๊ยว🐾', ephemeral: true });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+            const mode = interaction.options.getString('mode');
+            const text = interaction.options.getString('text');
+
+            // ดึง Settings เดิมมาเมี๊ยว🐾
+            const { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guildId).single();
+            const settings = guildData?.settings || {};
+            
+            const settingKey = mode === 'chat' ? 'toptier_title_chat' : 'toptier_title_speaker';
+            
+            if (text === '$text') {
+                delete settings[settingKey];
+            } else {
+                settings[settingKey] = text;
+            }
+
+            const { error } = await supabase.from('guilds').update({ settings }).eq('id', guildId);
+            
+            if (error) {
+                console.error('Update Settings Error:', error);
+                return interaction.editReply({ content: 'งื้อออ เก็บข้อมูลลงฐานข้อมูลไม่สำเร็จเมี๊ยว🐾' });
+            }
+
+            return interaction.editReply({ content: `✅ ตั้งค่าหัวตาราง **${mode}** เป็น: **${text === '$text' ? 'ค่าเริ่มต้น' : text}** เรียบร้อยแล้วเมี๊ยว🐾` });
+        }
+
+        // --- SUBCOMMAND: VIEW ---
+        await interaction.deferReply();
+        const mode = interaction.options.getString('mode');
+
+        // ดึง Settings สำหรับพื้นหลังและหัวข้อเมี๊ยว🐾
         const { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guildId).single();
-        const customBgURL = guildData?.settings?.rank_background_url || null;
+        const settings = guildData?.settings || {};
+        const customBgURL = settings.rank_background_url || null;
 
         let topData = [];
         let titleText = '';
@@ -51,7 +110,7 @@ module.exports = {
                 .order('total_chars', { ascending: false })
                 .limit(10);
             topData = data || [];
-            titleText = '🏆 Top Tier Leaderboard - Chat 💬';
+            titleText = settings.toptier_title_chat || '🏆 Top Tier Leaderboard - Chat 💬';
             colorTheme = '#FFB6C1'; // Pink
         } else {
             const { data } = await supabase.from('member_voice_levels')
@@ -60,7 +119,7 @@ module.exports = {
                 .order('total_seconds', { ascending: false })
                 .limit(10);
             topData = data || [];
-            titleText = '🏆 Top Tier Leaderboard - Speaker 🎙️';
+            titleText = settings.toptier_title_speaker || '🏆 Top Tier Leaderboard - Speaker 🎙️';
             colorTheme = '#A0C4FF'; // Blue
         }
 
@@ -85,14 +144,14 @@ module.exports = {
 
             // วาด Title
             ctx.fillStyle = colorTheme;
-            ctx.font = 'bold 42px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `bold 42px ${fontStackBold}`;
             ctx.textAlign = 'center';
             ctx.fillText(titleText, canvas.width / 2, 70);
 
             // วาดชื่อเซิร์ฟเวอร์
             const cleanGuildName = interaction.guild.name.replace(/[^\u0020-\u007E\u0E00-\u0E7F]/g, '').trim();
             ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.font = '20px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `20px ${fontStack}`;
             ctx.fillText(`Server: ${cleanGuildName}`, canvas.width / 2, 105);
 
             // วาดทีละอันดับ
@@ -109,7 +168,7 @@ module.exports = {
                 
                 drawRoundedRect(ctx, 40, yPos, 720, 70, 15);
 
-                // ดึงข้อมูล User (ลองดึงจาก Cache ก่อน ถ้าไม่มีลอง Fetch)
+                // ดึงข้อมูล User
                 let member = interaction.guild.members.cache.get(row.user_id);
                 if (!member) {
                     try {
@@ -131,7 +190,6 @@ module.exports = {
                     avatarURL = member.displayAvatarURL({ extension: 'png', size: 128 });
                     displayName = member.displayName;
                 } else {
-                    // ถ้าหา Member ไม่เจอ (อาจจะออกเซิร์ฟไปแล้ว) ให้ดึงจาก Discord API ตรงๆ เท่าที่ทำได้ หรือใช้ค่าเริ่มต้น
                     try {
                         const user = await interaction.client.users.fetch(row.user_id);
                         avatarURL = user.displayAvatarURL({ extension: 'png', size: 128 });
@@ -148,26 +206,23 @@ module.exports = {
                 try {
                     const avatarImg = await loadImage(avatarURL);
                     ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
-                } catch(e) {
-                    // รูปพัง ข้ามไป
-                }
+                } catch(e) {}
                 ctx.restore();
 
                 // วาดอันดับ
-                ctx.font = 'bold 28px "Leelawadee UI", Tahoma, sans-serif';
+                ctx.font = `bold 28px ${fontStackBold}`;
                 ctx.fillStyle = (i === 0) ? '#FFD700' : (i === 1) ? '#C0C0C0' : (i === 2) ? '#CD7F32' : '#FFFFFF';
                 ctx.fillText(`#${i + 1}`, 60, yPos + 45);
 
                 // วาดชื่อ
-                ctx.font = 'bold 24px "Leelawadee UI", Tahoma, sans-serif';
+                ctx.font = `bold 24px ${fontStackBold}`;
                 ctx.fillStyle = '#FFFFFF';
-                // ตัดชื่อถ้ายาวไป
                 if (displayName.length > 20) displayName = displayName.substring(0, 18) + '...';
                 ctx.fillText(displayName, 190, yPos + 43);
 
                 // วาดสถิติ
                 ctx.textAlign = 'right';
-                ctx.font = 'bold 20px "Leelawadee UI", Tahoma, sans-serif';
+                ctx.font = `bold 20px ${fontStackBold}`;
                 ctx.fillStyle = colorTheme;
 
                 if (mode === 'chat') {
@@ -175,7 +230,7 @@ module.exports = {
                     const level = Math.floor(Math.sqrt(totalChars / 100));
                     ctx.fillText(`Lv. ${level}`, 730, yPos + 30);
                     
-                    ctx.font = '16px "Leelawadee UI", Tahoma, sans-serif';
+                    ctx.font = `16px ${fontStack}`;
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
                     ctx.fillText(`${totalChars.toLocaleString()} XP`, 730, yPos + 55);
                 } else {
@@ -184,7 +239,7 @@ module.exports = {
                     const hours = (totalSeconds / 3600).toFixed(1);
                     ctx.fillText(`Lv. ${level}`, 730, yPos + 30);
                     
-                    ctx.font = '16px "Leelawadee UI", Tahoma, sans-serif';
+                    ctx.font = `16px ${fontStack}`;
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
                     ctx.fillText(`${hours} Hrs`, 730, yPos + 55);
                 }

@@ -4,6 +4,7 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 const fs = require('fs');
 const { drawBackground } = require('../../utils/canvasHelper');
+const { fontStack, fontStackBold } = require('../../utils/fontHelper');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -81,7 +82,7 @@ module.exports = {
             // --- วาดตัวหนังสือหลัก ---
             const pinkColor = '#FFB6C1';
             ctx.fillStyle = pinkColor;
-            ctx.font = 'bold 36px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `bold 36px ${fontStackBold}`;
             
             // ดึงชื่อเล่น (Nickname) ในเซิร์ฟเวอร์เมี๊ยว🐾
             const displayName = member ? member.displayName : targetUser.username;
@@ -91,7 +92,7 @@ module.exports = {
             // --- วาดชื่อเซิร์ฟเวอร์ (กรองสัญลักษณ์พิเศษที่อ่านไม่ออกออกเมี๊ยว🐾) ---
             const cleanGuildName = interaction.guild.name.replace(/[^\u0020-\u007E\u0E00-\u0E7F]/g, '').trim();
             ctx.fillStyle = 'rgba(255, 182, 193, 0.7)'; // Semitransparent pink
-            ctx.font = '18px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `18px ${fontStack}`;
             ctx.fillText(`Issued by: ${cleanGuildName}`, 260, 95);
 
             // --- แถบพลัง Chat ---
@@ -115,10 +116,10 @@ module.exports = {
 
             // ข้อความเลเวลแชท
             ctx.fillStyle = pinkColor;
-            ctx.font = 'bold 18px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `bold 18px ${fontStackBold}`;
             ctx.fillText(`💬 Chat Level: ${chatLevel}`, barX, chatBarY - 10);
             ctx.textAlign = 'right';
-            ctx.font = '16px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `16px ${fontStack}`;
             ctx.fillStyle = 'rgba(255, 182, 193, 0.8)';
             ctx.fillText(`${chatCurrentXP.toLocaleString()} / ${chatRequiredXP.toLocaleString()} XP`, barX + barWidth, chatBarY - 10);
             ctx.textAlign = 'left';
@@ -142,17 +143,17 @@ module.exports = {
 
             // ข้อความเลเวลเสียง
             ctx.fillStyle = pinkColor;
-            ctx.font = 'bold 18px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `bold 18px ${fontStackBold}`;
             ctx.fillText(`🎙️ Voice Level: ${voiceLevel} (${voiceHours}h)`, barX, voiceBarY - 10);
             ctx.textAlign = 'right';
-            ctx.font = '16px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `16px ${fontStack}`;
             ctx.fillStyle = 'rgba(255, 182, 193, 0.8)';
             ctx.fillText(`Voice Points`, barX + barWidth, voiceBarY - 10);
             ctx.textAlign = 'left';
 
             // --- ลายน้ำ PurrPaw (มุมขวาล่าง) ---
             ctx.fillStyle = 'rgba(255, 182, 193, 0.3)';
-            ctx.font = 'italic 14px "Leelawadee UI", Tahoma, sans-serif';
+            ctx.font = `italic 14px ${fontStack}`;
             ctx.textAlign = 'right';
             ctx.fillText('PurrPaw - Making Every Chat Pawsome 🐾', 950, 265);
             ctx.textAlign = 'left';

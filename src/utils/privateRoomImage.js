@@ -3,6 +3,7 @@ const { drawBackground } = require('./canvasHelper');
 const supabase = require('../supabaseClient');
 const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const { getGuildData } = require('./guildCache');
+const { fontStack, fontStackBold } = require('./fontHelper');
 
 /**
  * 🖼️ ฟังก์ชันสำหรับอัปเดตหน้าตาฟอร์มให้แสดงจำนวนห้องที่ใช้งานอยู่เมี๊ยว🐾
@@ -43,12 +44,12 @@ async function updatePrivateRoomForm(client, formId) {
         // วาดตัวเลข Current / Max
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
-        ctx.font = 'bold 90px "Leelawadee UI", Tahoma, sans-serif';
+        ctx.font = `bold 90px ${fontStackBold}`;
         ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
         ctx.shadowBlur = 15;
         ctx.fillText(`${currentCount} / ${limit}`, canvas.width / 2, canvas.height / 2 + 20);
         
-        ctx.font = 'bold 24px "Leelawadee UI", Tahoma, sans-serif';
+        ctx.font = `bold 24px ${fontStackBold}`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.fillText('ACTIVE PRIVATE ROOMS', canvas.width / 2, canvas.height / 2 + 70);
 
