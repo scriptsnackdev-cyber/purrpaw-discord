@@ -1,7 +1,7 @@
 const { Events } = require('discord.js');
 const { getGuildData } = require('../../utils/guildCache');
 const supabase = require('../../supabaseClient');
-const { getChatAI } = require('../../utils/openRouter');
+const { getChatAI, checkShouldRespondAI } = require('../../utils/openRouter');
 const { searchGif } = require('../../utils/tenor');
 
 module.exports = {
@@ -130,169 +130,395 @@ module.exports = {
         const guildSettings = settings; // ใช้ settings ที่ดึงมาแล้วด้านบน
         if (!activeChats || activeChats.length === 0) return;
 
-        // 3. ดึงข้อมูล "การแนะนำตัว" ของผู้ใช้ (เน้นเจ้าของห้องถ้าเป็นห้องส่วนตัว)
-        let introContext = "";
-        const introChId = guildSettings.ai_chat?.intro_channel_id;
+        // 3. ระบบ Debounce (หน่วงเวลา) สำหรับ AI Chat เมี๊ยว🐾
+        if (!message.client.aiChatQueues) message.client.aiChatQueues = new Map();
         
-        // เช็คก่อนว่าเป็นห้องส่วนตัวไหมเมี๊ยว🐾 (ย้ายออกมาไว้ข้างนอกเพื่อให้จุดอื่นใช้ได้ด้วย)
-        const { data: session } = await supabase.from('ai_chat_sessions').select('user_id').eq('channel_id', message.channelId).eq('is_deleted', false).single();
-        const targetUserId = session ? session.user_id : message.author.id;
-
-        if (introChId) {
-            try {
-                const introCh = await message.guild.channels.fetch(introChId).catch(() => null);
-                if (introCh && introCh.isTextBased()) {
-                    const intros = await introCh.messages.fetch({ limit: 100 });
-                    const userIntro = intros.find(m => m.author.id === targetUserId && m.content.length > 5);
-                    if (userIntro) {
-                        const introPrefix = session ? "เจ้าของห้องส่วนตัวนี้" : "ผู้ใช้คนนี้";
-                        introContext = `\n**ข้อมูลประวัติ/แนะนำตัวของ${introPrefix}:**\n${userIntro.content}\n(คุณควรจดจำชื่อหรือสิ่งที่เขาบอกไว้ในแชทนี้ด้วยเมี๊ยว!)`;
-                    }
-                }
-            } catch (e) { console.error('Intro scan error:', e); }
+        let queueState = message.client.aiChatQueues.get(message.channelId);
+        if (!queueState) {
+            queueState = {
+                timer: null,
+                firstMessageTime: Date.now(),
+                isProcessing: false,
+                abortController: null,
+                hasPendingMessages: false
+            };
+            message.client.aiChatQueues.set(message.channelId, queueState);
         }
 
-        // 4. วนลูปให้ AI ทุกตัวในห้องตอบ (หรือจะเลือกตัวแรกก็ได้)
-        for (const chat of activeChats) {
+        // หากกำลังประมวลผลอยู่ ไม่ต้องยกเลิก (ยกเว้นผ่านไปนานมากจริงๆ)
+        // แต่จะจดไว้ว่ามีข้อความใหม่มา เพื่อให้ประมวลผลรอบถัดไปทันทีที่จบรอบนี้เมี๊ยว🐾
+        if (queueState.isProcessing) {
+            queueState.hasPendingMessages = true;
+            return;
+        }
+
+        const runAILogic = async () => {
+            if (queueState.isProcessing) return; // ป้องกันการรันซ้อนเมี๊ยว🐾
+
+            queueState.isProcessing = true;
+            queueState.hasPendingMessages = false;
+            // สร้าง AbortController ใหม่สำหรับการประมวลผลรอบนี้
+            queueState.abortController = new AbortController();
+            const signal = queueState.abortController.signal;
+
             try {
-                // ดึงดีเทลตัวละคร
-                const { data: char } = await supabase.from('ai_characters').select('*').eq('id', chat.character_id).single();
-                if (!char) continue;
-
-                // กำหนดชื่อที่จะเอาไปแทนที่ {{user}} เมี๊ยว🐾
-                let targetName = "ลูกแมวเหมียว"; // ค่าเริ่มต้นสำหรับห้องรวม
+                // เช็คก่อนว่าเป็นห้องส่วนตัวไหมเมี๊ยว🐾
+                const { data: session } = await supabase.from('ai_chat_sessions').select('user_id').eq('channel_id', message.channelId).eq('is_deleted', false).single();
+                const targetUserId = session ? session.user_id : message.author.id;
                 
-                // เช็คอีกรอบเพื่อความชัวร์ว่าเป็นห้องส่วนตัวไหม (ใช้ตัวแปร session จากด้านบนได้เมี๊ยว)
+                let targetMember = null;
                 if (session) {
-                    const targetMember = await message.guild.members.fetch(targetUserId).catch(() => null);
-                    targetName = targetMember ? (targetMember.displayName || targetMember.user.username) : "คุณ";
+                    targetMember = await message.guild.members.fetch(targetUserId).catch(() => null);
                 }
 
-                // แทนที่ตัวแปรใน Persona เมี๊ยว🐾
-                let finalPersona = char.persona ? char.persona.replace(/{{char}}/gi, char.name) : "";
-                finalPersona = finalPersona.replace(/{{user}}/gi, targetName);
-
-                // 5. ดึงความจำ (Memory)
-                const limit = chat.memory_limit || 10;
-                const history = await message.channel.messages.fetch({ limit: limit + 1 });
-
-                // แปลงประวัติแชทให้เป็น Format ที่ AI เข้าใจ ([เวลา] ชื่อ: ข้อความ)
-                const messagesForAI = [
-                    {
-                        role: 'system',
-                        content: `คุณคือ ${char.name} ผู้มีบุคลิกดังนี้: ${finalPersona}
-นี่คือบทสนทนาใน Discord ห้องแชท สมาชิกคุยกันในรูปแบบ [เวลา] ชื่อ : ข้อความ
-คุณต้องตอบโต้ด้วยบุคลิกนี้เสมอ และหาวิธีเรียกชื่อผู้ใช้ให้ดูเป็นธรรมชาติเมี๊ยว!
-
-**กฎเหล็กในการตอบกลับ:**
-- ห้ามพิมพ์ชื่อและเวลา [เวลา] ชื่อ : นำหน้าข้อความตอบกลับของคุณเด็ดขาด! ให้พิมพ์เฉพาะเนื้อหาที่ต้องการพูดเท่านั้น เพราะบอทจะจัดการเรื่องชื่อของคุณให้เองเมี๊ยว!
-- ห้ามใช้ Tag HTML เช่น <details>, <summary> เด็ดขาด! ให้ใช้ Markdown ของ Discord แทนเมี๊ยว
-
-**คำแนะนำพิเศษ (Vision):**
-หากผู้ใช้ส่งรูปภาพหรือ GIF มา ลิงก์รูปภาพเหล่านั้นจะถูกแนบไปกับข้อความ ให้คุณ "วิเคราะห์" สิ่งที่เห็นและตอบกลับให้ตรงบรรยากาศด้วยเมี๊ยว!
-
-**คำแนะนำพิเศษ (GIF):**
-หากคุณต้องการแสดงท่าทางหรืออารมณ์ด้วย GIF ให้ใส่แท็ก [GIF: คำค้นหาสี้นๆ ภาษาอังกฤษ] ไว้ท้ายข้อความ และบอทจะหา Gif มาแสดงให้เองเมี๊ยว!${introContext}`
-                    }
-                ];
-
-                // ย้อนกลับประวัติ (จากเก่าไปใหม่)
-                const historyData = Array.from(history.values())
-                    .slice(1) // ตัดข้อความล่าสุดตัวเองออก
-                    .reverse()
-                    .map(m => {
-                        const time = m.createdAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
-                        const name = m.author.displayName || m.author.username;
-                        return {
-                            role: m.author.id === message.client.user.id ? 'assistant' : 'user',
-                            content: `[${time}] ${name} : ${m.content}`
-                        };
-                    });
-
-                messagesForAI.push(...historyData);
-
-                // ใส่ข้อความปัจจุบันของผู้ใช้
-                const currentTime = message.createdAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
-                const userName = message.author.displayName || message.author.username;
-                const userContent = [{ type: 'text', text: `[${currentTime}] ${userName} : ${message.content}` }];
-
-                if (message.attachments.size > 0) {
-                    message.attachments.forEach(att => {
-                        if (att.contentType?.startsWith('image/')) {
-                            userContent.push({ type: 'image_url', image_url: { url: att.url } });
+                // ดึงโปรไฟล์ตัวละครทั้งหมด และหา Memory Limit สูงสุด
+                const characterProfiles = [];
+                let maxMemoryLimit = 10;
+                
+                for (const chat of activeChats) {
+                    const { data: char } = await supabase.from('ai_characters').select('*').eq('id', chat.character_id).single();
+                    if (char) {
+                        characterProfiles.push(char);
+                        if (chat.memory_limit > maxMemoryLimit) {
+                            maxMemoryLimit = chat.memory_limit;
                         }
-                    });
+                    }
                 }
+                
+                if (characterProfiles.length === 0) return;
 
-                // สแกนหาลิงก์รูปภาพ/GIF ในเนื้อหาข้อความเมี๊ยว🐾
-                const urlRegex = /(https?:\/\/\S+\.(?:png|jpe?g|webp|gif))/gi;
-                const foundUrls = message.content.match(urlRegex) || [];
-                foundUrls.forEach(url => {
-                    userContent.push({ type: 'image_url', image_url: { url: url } });
+                // 4. ดึงประวัติแชทและแยกรายชื่อผู้ใช้ (Dynamic Context)
+                const history = await message.channel.messages.fetch({ limit: maxMemoryLimit });
+                const historyData = Array.from(history.values()).reverse();
+                    
+                // หาสมาชิกที่มีส่วนร่วมในแชทล่าสุด
+                const activeUserIds = new Set();
+                historyData.forEach(m => {
+                    if (!m.author.bot) activeUserIds.add(m.author.id);
                 });
 
-                // สแกนหาจาก Embeds (เช่น GIF จาก Tenor/Giphy ที่ Discord แปลงให้)เมี๊ยว🐾
-                if (message.embeds.length > 0) {
-                    message.embeds.forEach(embed => {
-                        if (embed.image?.url) {
-                            userContent.push({ type: 'image_url', image_url: { url: embed.image.url } });
-                        } else if (embed.thumbnail?.url) {
-                            userContent.push({ type: 'image_url', image_url: { url: embed.thumbnail.url } });
+                // --- 🌟 PRE-CHECK AI 🌟 ---
+                const recentHistory = historyData.slice(-10).map(m => {
+                    const name = m.author.username;
+                    return `[${name}] : ${m.content}`;
+                }).join('\n');
+                
+                const botNamesList = characterProfiles.map(c => c.name).join(', ');
+                const userNamesList = Array.from(activeUserIds).map(id => {
+                    const uObj = message.client.users.cache.get(id);
+                    return uObj ? uObj.username : id;
+                }).join(', ');
+
+                const activeCharNames = await checkShouldRespondAI(recentHistory, botNamesList, userNamesList, signal);
+                if (!activeCharNames || activeCharNames.length === 0) {
+                    return; // ยกเลิกการประมวลผลเพราะไม่มี AI ตัวไหนอยากตอบเมี๊ยว🐾
+                }
+
+                // กรองเฉพาะตัวละครที่จะตอบ (เพื่อลด Token และความสับสน) เมี๊ยว🐾
+                const filteredProfiles = characterProfiles.filter(p => 
+                    activeCharNames.some(name => name.trim().toLowerCase() === p.name.toLowerCase())
+                );
+                // --------------------------
+
+                // 5. ดึงข้อมูลการแนะนำตัว (Introductions)
+                let usersContextXml = "<users_context>\n";
+                const introChId = guildSettings.ai_chat?.intro_channel_id;
+                const backupIntroChId = guildSettings.ai_chat?.intro_backup_channel_id;
+                
+                const foundIntroUserIds = new Set();
+                const userNamesMap = new Map();
+                const userIntrosMap = new Map();
+                
+                for (const uId of activeUserIds) {
+                    const uObj = message.client.users.cache.get(uId);
+                    const uname = uObj ? uObj.username : uId;
+                    
+                    if (uname === 'superdupermeow_') {
+                        const smIntro = `⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹\nชื่อ: คุณแม่เหมียว\nเพศ: หญิง\nบทบาท: คุณแม่เหมียวในห้อง ห้ามเถียง ห้ามด่า ต้องฟังแม่ ห้ามมารักหรือชอบแม่ ไปชอบลูกแมวเหมียว\n⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹`;
+                        userIntrosMap.set(uId, smIntro);
+                        userNamesMap.set(uId, 'คุณแม่เหมียว');
+                        foundIntroUserIds.add(uId);
+                    } else {
+                        userNamesMap.set(uId, uname);
+                    }
+                }
+                
+                const fetchIntrosFromChannel = async (channelId) => {
+                    try {
+                        const ch = await message.guild.channels.fetch(channelId).catch(() => null);
+                        if (ch && ch.isTextBased()) {
+                            const intros = await ch.messages.fetch({ limit: 100 });
+                            for (const uId of activeUserIds) {
+                                if (foundIntroUserIds.has(uId)) continue;
+                                
+                                const userIntro = intros.find(m => m.author.id === uId && m.content.length > 5);
+                                if (userIntro) {
+                                    const content = userIntro.content;
+                                    const nameMatch = content.match(/ชื่อ\s*:\s*([^\n]+)/);
+                                    if (nameMatch) {
+                                        userNamesMap.set(uId, nameMatch[1].trim());
+                                    }
+                                    
+                                    userIntrosMap.set(uId, content);
+                                    foundIntroUserIds.add(uId);
+                                }
+                            }
                         }
-                    });
+                    } catch (e) { console.error(`Intro scan error for channel ${channelId}:`, e); }
+                };
+
+                if (introChId) await fetchIntrosFromChannel(introChId);
+                if (backupIntroChId && foundIntroUserIds.size < activeUserIds.size) await fetchIntrosFromChannel(backupIntroChId);
+                
+                for (const [uId, introContent] of userIntrosMap.entries()) {
+                    usersContextXml += `  <user name="${userNamesMap.get(uId)}">${introContent}</user>\n`;
                 }
+                usersContextXml += "</users_context>";
 
-                messagesForAI.push({ role: 'user', content: userContent });
+                // 6. สร้าง XML สำหรับตัวละคร (Personas) - ส่งเฉพาะตัวที่จะตอบเพื่อประหยัด Token เมี๊ยว🐾
+                let charsXml = "<characters>\n";
+                filteredProfiles.forEach(char => {
+                    let targetName = "ลูกแมวเหมียว";
+                    if (session) {
+                        targetName = targetMember ? (targetMember.displayName || targetMember.user.username) : "คุณ";
+                    }
+                    let finalPersona = char.persona ? char.persona.replace(/{{char}}/gi, char.name) : "";
+                    finalPersona = finalPersona.replace(/{{user}}/gi, targetName);
+                    charsXml += `  <persona name="${char.name}">${finalPersona}</persona>\n`;
+                });
+                charsXml += "</characters>";
 
-                // 6. เรียก AI จริง!
+                const activeUserNames = Array.from(userNamesMap.values()).join(", ");
+                const activePersonaNames = filteredProfiles.map(c => c.name).join(", ");
+                const roomStatusXml = `<room_status>\nผู้ที่กำลังอยู่ในห้องสนทนาตอนนี้:\n- ผู้ใช้ (Users): ${activeUserNames}\n- ตัวละครบอท (Personas ที่จะตอบ): ${activePersonaNames}\n</room_status>`;
+                // 7. ประกอบร่าง System Prompt ด้วยโครงสร้าง XML (Design v2)
+                const systemPrompt = `<instructions>
+You are a role-playing AI in a multiplayer chatroom. 
+
+[CORE RULES]
+- **ALLOWED CHARACTERS:** คุณสามารถตอบได้เฉพาะตัวละครที่มีรายชื่ออยู่ในแท็ก <characters> เท่านั้น: [${activePersonaNames}] (ห้ามสวมบทบาทเป็นตัวละครอื่นเด็ดขาด)
+- **IMMERSIVE PORTRAYAL:** มั่นคงในคาแรคเตอร์และอารมณ์ของตัวละครเสมอ
+- **XML OUTPUT ONLY:** คุณ "ต้อง" ตอบกลับภายใต้โครงสร้าง XML ที่กำหนดให้เท่านั้น ห้ามมีข้อความนอกแท็ก
+- **NO HEADERS:** ห้ามใส่ [HH:mm] หรือ ชื่อตัวละคร : ลงในบทสนทนาเด็ดขาด ระบบจะจัดการเอง
+
+[OUTPUT STRUCTURE]
+คุณต้องตอบกลับด้วยโครงสร้างดังนี้:
+<turn_responses>
+  <persona name="ชื่อตัวละคร">
+    <thought>...วิเคราะห์สถานการณ์ เจตนาของผู้ใช้ และวางแผนการตอบสนอง...</thought>
+    <dialogue>...บทสนทนาคำพูดล้วนๆ (ห้ามมีบรรยายกริยา หรือใส่หัวข้อชื่อ/เวลา)...</dialogue>
+  </persona>
+</turn_responses>
+
+[MULTI-CHARACTER RULES]
+- หากมีตัวละครต้องการตอบหลายตัว ให้สร้างบล็อก <persona> แยกกันภายใต้ <turn_responses> เดียวกัน
+- หากตัวละครไหนพิจารณาแล้วว่า "ไม่ควรตอบ" ให้ใช้รูปแบบ: <persona name="..." action="skip"><thought>...</thought></persona>
+- สนับสนุนให้ตัวละครโต้ตอบ แซว หรือเถียงกันเองได้ตามนิสัย
+- ตัวละคร 1 ตัวควรพูดสั้นๆ (50-100 ตัวอักษร) เพื่อความสมจริง
+
+[DIALOGUE STYLE]
+- ใช้ภาษาพูดธรรมชาติ มีการพูดติดอ่าง หรือลังเลบ้าง (Imperfect speech)
+- ห้ามใช้เครื่องหมายดอกจัน * บรรยายท่าทาง ให้ใช้คำพูดสื่อสารอารมณ์แทน
+</instructions>
+
+${charsXml}
+
+${usersContextXml}
+
+${roomStatusXml}`;
+
+                const messagesForAI = [{ role: 'system', content: systemPrompt }];
+
+                historyData.forEach((m, index) => {
+                    const time = m.createdAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const name = userNamesMap.get(m.author.id) || m.author.username;
+                    
+                    let replyAttr = "";
+                    if (m.reference && m.reference.messageId) {
+                        const refMsg = historyData.find(msg => msg.id === m.reference.messageId);
+                        if (refMsg) {
+                            const refName = userNamesMap.get(refMsg.author.id) || refMsg.author.username;
+                            replyAttr = ` replying_to="${refName}"`;
+                        } else if (m.mentions && m.mentions.repliedUser) {
+                            const refName = userNamesMap.get(m.mentions.repliedUser.id) || m.mentions.repliedUser.username;
+                            replyAttr = ` replying_to="${refName}"`;
+                        }
+                    }
+
+                    const typeAttr = m.author.bot ? ' type="persona"' : '';
+                    const msgContent = m.content.replace(/[<>]/g, ''); // ป้องกัน XML แตกเบื้องต้นเมี๊ยว🐾
+                    const xmlMessage = `<msg from="${name}"${typeAttr}${replyAttr} time="${time}">${msgContent}</msg>`;
+
+                    if (index === historyData.length - 1 && !m.author.bot) {
+                        const contentArray = [{ type: 'text', text: xmlMessage }];
+                        
+                        if (m.attachments.size > 0) {
+                            m.attachments.forEach(att => {
+                                if (att.contentType?.startsWith('image/')) {
+                                    contentArray.push({ type: 'image_url', image_url: { url: att.url } });
+                                }
+                            });
+                        }
+                        const urlRegex = /(https?:\/\/\S+\.(?:png|jpe?g|webp|gif))/gi;
+                        const foundUrls = m.content.match(urlRegex) || [];
+                        foundUrls.forEach(url => {
+                            contentArray.push({ type: 'image_url', image_url: { url: url } });
+                        });
+                        if (m.embeds.length > 0) {
+                            m.embeds.forEach(embed => {
+                                if (embed.image?.url) {
+                                    contentArray.push({ type: 'image_url', image_url: { url: embed.image.url } });
+                                } else if (embed.thumbnail?.url) {
+                                    contentArray.push({ type: 'image_url', image_url: { url: embed.thumbnail.url } });
+                                }
+                            });
+                        }
+
+                        messagesForAI.push({
+                            role: 'user',
+                            content: contentArray
+                        });
+                    } else {
+                        messagesForAI.push({
+                            role: m.author.bot ? 'assistant' : 'user',
+                            content: xmlMessage
+                        });
+                    }
+                });
+
+                // 8. เรียก AI
                 await message.channel.sendTyping();
-                let aiResponse = await getChatAI(messagesForAI);
+                
+                let aiResponse = await getChatAI(messagesForAI, signal);
+                
+                // 9. แยกแยะและประมวลผล XML Responses (Design v2)
+                const personaRegex = /<persona\s+name=["']([^"']+)["'](?:\s+action=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/persona>/gi;
+                const thoughtRegex = /<thought>([\s\S]*?)<\/thought>/i;
+                const dialogueRegex = /<dialogue>([\s\S]*?)<\/dialogue>/i;
 
-                // --- Clean up: ลบ Prefix [เวลา] ชื่อ : ที่ AI อาจจะเผลอใส่มา ---
-                aiResponse = aiResponse.replace(/^\[\d{2}:\d{2}\]\s*[^:]+\s*:\s*/, '').trim();
+                let personaMatch;
+                const responses = [];
+                
+                while ((personaMatch = personaRegex.exec(aiResponse)) !== null) {
+                    const charName = personaMatch[1].trim();
+                    const action = personaMatch[2];
+                    const personaBody = personaMatch[3];
 
-                // 7. จัดการค้นหา GIF
-                let gifUrl = null;
-                const gifMatch = aiResponse.match(/\[GIF:\s*(.+?)\]/);
-                if (gifMatch) {
-                    const query = gifMatch[1];
-                    gifUrl = await searchGif(query);
-                    aiResponse = aiResponse.replace(/\[GIF:\s*(.+?)\]/g, '').trim();
+                    if (action === 'skip') continue;
+
+                    const dialogueMatch = personaBody.match(dialogueRegex);
+                    if (dialogueMatch) {
+                        responses.push({
+                            name: charName,
+                            message: dialogueMatch[1].trim()
+                        });
+                    }
                 }
-
-                // 8. จัดการ Webhook (ใช้ Cache เพื่อความรวดเร็วเมี๊ยว🐾)
+                
+                // Fallback กรณี AI หลุดฟอร์แมตเมี๊ยว🐾
+                if (responses.length === 0) {
+                    const legacyRegex = /<\s*(?:[a-zA-Z0-9_]+_)?response\s+name=["']([^"']+)["'][^>]*>([\s\S]*?)<\/\s*(?:[a-zA-Z0-9_]+_)?response\s*>/gi;
+                    let m;
+                    while ((m = legacyRegex.exec(aiResponse)) !== null) {
+                        responses.push({
+                            name: m[1].trim(),
+                            message: m[2].replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').replace(/<\/?thinking>/gi, '').trim()
+                        });
+                    }
+                }
+                
+                // กรองผลลัพธ์สุดท้ายให้เหลือแค่ตัวละครที่ได้รับอนุญาตให้ตอบเท่านั้นเมี๊ยว🐾
+                const allowedResponses = responses.filter(resp => 
+                    filteredProfiles.some(p => p.name.toLowerCase() === resp.name.toLowerCase())
+                );
+                
+                // 10. จัดการ Webhook และส่งข้อความ
                 if (!message.client.webhookCache) message.client.webhookCache = new Map();
                 let webhook = message.client.webhookCache.get(message.channelId);
-
+                
                 if (!webhook) {
                     const webhooks = await message.channel.fetchWebhooks();
                     webhook = webhooks.find(wh => wh.name === 'PurrPaw-AI');
-                    if (!webhook) {
-                        webhook = await message.channel.createWebhook({ name: 'PurrPaw-AI', reason: 'AI Persona Chat' });
-                    }
+                    if (!webhook) webhook = await message.channel.createWebhook({ name: 'PurrPaw-AI', reason: 'AI Persona Chat' });
                     message.client.webhookCache.set(message.channelId, webhook);
                 }
-
-                // 9. ส่งข้อความ (รองรับการตัดแบ่งข้อความถ้าเกิน 2000 ตัวอักษร)
-                const fullMessage = gifUrl ? `${aiResponse}\n${gifUrl}` : aiResponse;
                 
-                // ฟังก์ชันตัดแบ่งข้อความเมี๊ยว🐾
-                const chunks = [];
-                for (let i = 0; i < fullMessage.length; i += 2000) {
-                    chunks.push(fullMessage.substring(i, i + 2000));
-                }
+                for (const resp of allowedResponses) {
+                    const charProfile = filteredProfiles.find(c => c.name.toLowerCase() === resp.name.toLowerCase()) || filteredProfiles[0];
+                    
+                    let finalMsg = resp.message;
+                    
+                    // ล้างแท็ก <thinking> ออก
+                    finalMsg = finalMsg.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+                    finalMsg = finalMsg.replace(/<\/?thinking>/gi, '').trim();
 
-                for (const chunk of chunks) {
-                    await webhook.send({
-                        content: chunk,
-                        username: char.name,
-                        avatarURL: char.image_url || null
-                    });
-                }
+                    // ล้าง Header ที่ AI อาจจะเผลอใส่มา (เช่น [23:40] น๊อต : ...) ออกให้หมดทุกบรรทัดเมี๊ยว🐾
+                    finalMsg = finalMsg.replace(/^\[\d{2}:\d{2}\]\s*[^:]+\s*:\s*/gm, '').trim();
+                    
+                    if (!finalMsg || finalMsg.length === 0) continue; 
+                    // หาก AI เผลอส่งแท็ก [GIF: ...] มา ให้ลบทิ้ง
+                    finalMsg = finalMsg.replace(/\[GIF:\s*(.+?)\]/gi, '').trim();
 
+                    const fullMessage = finalMsg;
+                    if (!fullMessage) continue;
+
+                    const chunks = [];
+                    for (let i = 0; i < fullMessage.length; i += 2000) {
+                        chunks.push(fullMessage.substring(i, i + 2000));
+                    }
+
+                    for (const chunk of chunks) {
+                        await webhook.send({
+                            content: chunk,
+                            username: charProfile.name,
+                            avatarURL: charProfile.image_url || null
+                        });
+                    }
+                }
             } catch (err) {
-                console.error('Real AI Error:', err);
+                if (err.name === 'AbortError' || err.message === 'canceled') {
+                    console.log('AI processing aborted.');
+                } else {
+                    console.error('Real AI Error:', err);
+                }
+            } finally {
+                queueState.isProcessing = false;
+                // ถ้ามีข้อความค้างอยู่ให้รันต่อเมี๊ยว🐾
+                if (queueState.hasPendingMessages) {
+                    queueState.hasPendingMessages = false;
+                    queueState.firstMessageTime = Date.now();
+                    queueState.timer = setTimeout(() => runAILogic().catch(console.error), 2000);
+                } else {
+                    message.client.aiChatQueues.delete(message.channelId);
+                }
             }
+        };
+
+        // 11. เริ่มจับเวลา Debounce
+        const now = Date.now();
+        const timeSinceFirstMessage = now - queueState.firstMessageTime;
+
+        if (queueState.timer) {
+            clearTimeout(queueState.timer);
         }
+
+        message.channel.sendTyping().catch(() => {});
+
+        if (timeSinceFirstMessage >= 7000) {
+            runAILogic().catch(console.error);
+        } else {
+            // ปรับให้เร็วขึ้นนิดหน่อยเป็น 2 วินาทีเมี๊ยว🐾
+            let waitTime = 1000;
+            const remainingTo2Sec = 2000 - timeSinceFirstMessage;
+            if (remainingTo2Sec > waitTime) {
+                waitTime = remainingTo2Sec;
+            }
+
+            queueState.timer = setTimeout(() => {
+                runAILogic().catch(console.error);
+            }, waitTime);
+        }
+
+        return; // 🐾เมี๊ยว
     }
 };

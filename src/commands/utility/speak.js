@@ -17,6 +17,9 @@ module.exports = {
         .addStringOption(option => 
             option.setName('avatar')
                 .setDescription('URL รูปโปรไฟล์ (ถ้าเลือก AI Character ระบบจะใช้รูปของ AI ตัวนั้นเมี๊ยว)'))
+        .addAttachmentOption(option => 
+            option.setName('image')
+                .setDescription('รูปภาพที่ต้องการส่งเมี๊ยว (เลือกจากในเครื่องได้เลยเมี๊ยว)'))
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async autocomplete(interaction) {
@@ -41,6 +44,7 @@ module.exports = {
         const charInput = interaction.options.getString('character');
         const message = interaction.options.getString('message');
         const manualAvatar = interaction.options.getString('avatar');
+        const attachment = interaction.options.getAttachment('image');
         const guildId = interaction.guild.id;
 
         await interaction.deferReply({ ephemeral: true });
@@ -78,7 +82,8 @@ module.exports = {
             await webhook.send({
                 content: message,
                 username: finalName,
-                avatarURL: finalAvatar || null
+                avatarURL: finalAvatar || null,
+                files: attachment ? [attachment] : []
             });
 
             await interaction.editReply({ content: `✅ ส่งข้อความในนาม **${finalName}** เรียบร้อยแล้วเมี๊ยววว! 🎭✨` });

@@ -42,6 +42,10 @@ module.exports = {
             sub.setName('set-introduction')
                 .setDescription('📚 ตั้งค่าห้องแนะนำตัวให้ AI ไปแอบศึกษาเมี๊ยว')
                 .addChannelOption(o => o.setName('channel').setDescription('ห้องแนะนำตัวเมี๊ยว').addChannelTypes(ChannelType.GuildText).setRequired(true)))
+        .addSubcommand(sub => 
+            sub.setName('set-introduction-backup')
+                .setDescription('📚 ตั้งค่าห้องแนะนำตัวสำรองให้ AI ไปแอบศึกษาเมี๊ยว')
+                .addChannelOption(o => o.setName('channel').setDescription('ห้องแนะนำตัวสำรองเมี๊ยว').addChannelTypes(ChannelType.GuildText).setRequired(true)))
         .addSubcommand(sub =>
             sub.setName('create-private-form')
                 .setDescription('📩 สร้างปุ่มกดเปิดห้องคุยส่วนตัวกับ AI เมี๊ยว')
@@ -174,6 +178,20 @@ module.exports = {
             await supabase.from('guilds').update({ settings }).eq('id', guildId);
             invalidateCache(guildId);
             return interaction.editReply({ content: `✅ AI จะเริ่มไปแอบอ่านข้อมูลแนะนำตัวจากห้อง ${channel} แล้วนะเมี๊ยวว! 📚` });
+        }
+
+        // 8.5. Backup Intro Channel Settings
+        if (sub === 'set-introduction-backup') {
+            const channel = interaction.options.getChannel('channel');
+            let { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guildId).single();
+            const settings = guildData?.settings || {};
+            
+            if (!settings.ai_chat) settings.ai_chat = {};
+            settings.ai_chat.intro_backup_channel_id = channel.id;
+
+            await supabase.from('guilds').update({ settings }).eq('id', guildId);
+            invalidateCache(guildId);
+            return interaction.editReply({ content: `✅ ตั้งค่าห้อง **${channel}** เป็นห้องแนะนำตัวสำรอง (Backup) เรียบร้อยแล้วเมี๊ยวว! 📚` });
         }
 
         // 9. Create Private AI Chat Form
