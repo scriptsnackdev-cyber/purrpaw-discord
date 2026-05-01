@@ -29,7 +29,14 @@ if (isWindows && !fs.existsSync(YTDLP_PATH)) {
 
 // ── Helper: เรียก yt-dlp แล้วรับ JSON กลับมา (มี timeout 30 วินาที) ──
 async function ytdlp(args) {
-    const { stdout } = await execFileAsync(YTDLP_PATH, args, {
+    const finalArgs = [...args];
+    
+    // ถ้ามี Cookie ใน .env ให้ส่งไปด้วยเพื่อป้องกันโดน YouTube บล็อกบน VPS เมี๊ยว🐾
+    if (process.env.YOUTUBE_COOKIE) {
+        finalArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
+    }
+
+    const { stdout } = await execFileAsync(YTDLP_PATH, finalArgs, {
         timeout: 30000,             // 30 วินาที ถ้านานกว่านี้ kill process
         maxBuffer: 1024 * 1024 * 50, // 50MB buffer
         windowsHide: true,
@@ -45,7 +52,8 @@ const ytdlpPlugin = {
     init() {},
 
     async validate(url) {
-        return url.includes('youtube.com') || url.includes('youtu.be') || url.includes('music.youtube.com');
+        // ให้ Plugin นี้จัดการทั้งหมด (รวมถึงการ Search ด้วยชื่อเพลง) เมี๊ยว🐾
+        return true;
     },
 
     // ── เปิดเพลงจาก URL ──
