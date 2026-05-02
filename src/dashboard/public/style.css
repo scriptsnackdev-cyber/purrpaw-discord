@@ -30,6 +30,7 @@ body {
 .app-container {
     display: flex;
     height: 100%;
+    width: 100vw;
 }
 
 /* ── Guild Sidebar ── */
@@ -212,12 +213,29 @@ body {
     color: var(--text-muted);
 }
 
-/* ── Chat Area ── */
-.chat-area {
+/* ── Main Content Area ── */
+.main-content {
     flex: 1;
-    background-color: var(--bg-chat);
     display: flex;
     flex-direction: column;
+    background-color: var(--bg-chat);
+    min-width: 0;
+}
+
+.view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* ── Member Sidebar ── */
+.member-sidebar {
+    width: 240px;
+    background-color: var(--bg-sidebar);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    border-left: 1px solid rgba(0,0,0,0.2);
 }
 
 .chat-header {
@@ -245,15 +263,14 @@ body {
     display: none; /* Removed from header */
 }
 
-.message-display {
+.message-log {
     flex: 1;
-    padding: 16px;
+    padding: 20px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
-    align-items: stretch;
     gap: 16px;
+    scroll-behavior: smooth;
 }
 
 .message-item {
