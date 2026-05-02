@@ -12,76 +12,100 @@
     <div class="app-container">
         <!-- Sidebar: Servers -->
         <nav class="guild-sidebar">
-            <div class="guild-icon home-icon active" title="Home">
-                <i class="fa-solid fa-paw"></i>
+            <div class="sidebar-top">
+                <div class="guild-icon home-icon active" title="Home" id="go-home">
+                    <i class="fa-solid fa-paw"></i>
+                </div>
+                <div class="separator"></div>
+                <div id="guild-list">
+                    <!-- Guilds will be loaded here -->
+                </div>
+                <div class="guild-icon tool-icon" id="open-tools" title="เครื่องมือพิเศษ">
+                    <i class="fa-solid fa-screwdriver-wrench"></i>
+                </div>
             </div>
-            <div class="separator"></div>
-            <div id="guild-list">
-                <!-- Guilds will be loaded here -->
+            <div class="sidebar-bottom">
+                <div class="guild-icon" id="open-char-modal" title="เลือกบทบาท">
+                    <img id="current-char-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Character">
+                </div>
             </div>
         </nav>
 
         <!-- Sidebar: Channels -->
-        <aside class="channel-sidebar">
+        <aside class="channel-sidebar" id="channel-sidebar">
             <header class="sidebar-header">
-                <h1 id="current-guild-name">Select Server</h1>
+                <h1 id="current-guild-display">Select Server</h1>
             </header>
             <div class="channel-list" id="channel-list">
                 <div class="empty-state">กรุณาเลือกเซิร์ฟเวอร์ก่อนเมี๊ยว</div>
             </div>
-            <div class="user-panel">
-                <div class="user-info">
-                    <img id="bot-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot Avatar">
-                    <div class="user-details">
-                        <span class="username">PurrPaw Bot</span>
-                        <span class="status">Online</span>
-                    </div>
-                </div>
-            </div>
         </aside>
 
         <!-- Main Content -->
-        <main class="chat-area">
-            <header class="chat-header">
-                <div class="channel-info">
-                    <i class="fa-solid fa-hashtag"></i>
-                    <h2 id="current-channel-name">ยังไม่ได้เลือกห้อง</h2>
-                </div>
-            </header>
+        <main class="main-content">
+            <!-- Chat View -->
+            <div id="chat-view" class="view-container">
+                <header class="chat-header">
+                    <div class="header-info">
+                        <i class="fa-solid fa-hashtag"></i>
+                        <span id="current-channel-name">ยังไม่ได้เลือกห้อง</span>
+                    </div>
+                </header>
 
-            <section class="message-display" id="message-log">
-                <div class="welcome-container">
-                    <i class="fa-solid fa-comments"></i>
-                    <h3>ยินดีต้อนรับสู่ PurrPaw Dashboard!</h3>
-                    <p>เลือกห้องทางซ้ายมือ และพิมพ์ข้อความในนาม AI Character ได้เลยเมี๊ยววว ✨</p>
-                </div>
-            </section>
-
-            <footer class="input-area">
-                <div class="input-wrapper">
-                    <!-- Mention Autocomplete -->
-                    <div id="mention-autocomplete" class="mention-autocomplete d-none"></div>
-
-                    <!-- Attachment Preview Area -->
-                    <div id="attachment-previews" class="attachment-previews d-none"></div>
-                    
-                    <div class="input-container">
-                        <button class="attach-btn" id="trigger-upload"><i class="fa-solid fa-circle-plus"></i></button>
-                        <input type="file" id="file-input" multiple accept="image/*" class="d-none">
-                        
-                        <div class="char-avatar-container" id="open-char-modal">
-                            <img id="current-char-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Character">
-                            <div class="char-badge"><i class="fa-solid fa-mask"></i></div>
-                        </div>
-                        <textarea id="message-input" placeholder="พิมพ์ข้อความที่นี่..." disabled></textarea>
-                        <button id="send-btn" disabled><i class="fa-solid fa-paper-plane"></i></button>
+                <div id="message-log" class="message-log">
+                    <div class="welcome-container">
+                        <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Welcome" style="width: 80px; border-radius: 50%; margin-bottom: 20px;">
+                        <h2>ยินดีต้อนรับสู่ PurrPaw Dashboard 🐾</h2>
+                        <p>กรุณาเลือกเซิร์ฟเวอร์และห้องแชทเพื่อเริ่มต้นการสนทนาเมี๊ยว!</p>
                     </div>
                 </div>
-            </footer>
+                
+                <div class="input-area">
+                    <div id="attachment-previews" class="attachment-previews d-none"></div>
+                    <div id="mention-autocomplete" class="mention-autocomplete d-none"></div>
+                    <div class="input-wrapper">
+                        <button class="attach-btn" id="trigger-upload"><i class="fa-solid fa-circle-plus"></i></button>
+                        <textarea id="message-input" placeholder="ส่งข้อความ..." disabled></textarea>
+                        <button class="send-btn" id="send-btn" disabled><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                    <input type="file" id="file-input" multiple accept="image/*" class="d-none">
+                </div>
+            </div>
+
+            <!-- Tools View -->
+            <div id="tools-view" class="view-container d-none">
+                <header class="chat-header">
+                    <div class="header-info">
+                        <i class="fa-solid fa-screwdriver-wrench"></i>
+                        <span>เครื่องมือพิเศษ (Owner Only) 🐾</span>
+                    </div>
+                    <button class="close-tools-btn" id="close-tools"><i class="fa-solid fa-xmark"></i></button>
+                </header>
+                <div class="tools-content">
+                    <div class="tool-card music-downloader">
+                        <div class="tool-header">
+                            <i class="fa-solid fa-music"></i>
+                            <h3>Music Downloader (MP3)</h3>
+                        </div>
+                        <p class="tool-desc">รองรับ YouTube และ Spotify (คุณภาพสูง 320kbps)</p>
+                        <div class="download-input-group">
+                            <input type="text" id="music-url" placeholder="วางลิงก์ YouTube หรือ Spotify ที่นี่เมี๊ยว...">
+                            <button id="fetch-music-btn">ตรวจสอบ</button>
+                        </div>
+                        <div id="music-preview" class="music-preview d-none">
+                            <!-- Preview content loaded via JS -->
+                        </div>
+                        <div id="download-status" class="download-status d-none">
+                            <div class="loader-spinner"></div>
+                            <span id="status-text">กำลังดำเนินการ...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Sidebar: Members -->
-        <aside class="member-sidebar">
+        <aside class="member-sidebar" id="member-sidebar">
             <header class="sidebar-header">
                 <h3>สมาชิกเซิร์ฟเวอร์</h3>
             </header>
@@ -98,27 +122,14 @@
                 <h3 id="modal-title">เลือกตัวละครที่จะสวมบทบาท</h3>
                 <button id="close-modal"><i class="fa-solid fa-xmark"></i></button>
             </header>
-            
             <div id="char-selection-view">
-                <div class="char-grid" id="char-grid">
-                    <!-- Characters will be loaded here -->
-                </div>
+                <div class="char-grid" id="char-grid"></div>
             </div>
-
             <div id="char-create-view" class="d-none">
                 <form id="create-char-form" class="modal-form">
-                    <div class="form-group">
-                        <label>ชื่อตัวละคร</label>
-                        <input type="text" id="new-char-name" placeholder="เช่น Alan, Haru" required>
-                    </div>
-                    <div class="form-group">
-                        <label>URL รูปภาพ</label>
-                        <input type="url" id="new-char-url" placeholder="https://..." required>
-                    </div>
-                    <div class="form-group">
-                        <label>Persona (บทบาท/บุคลิก)</label>
-                        <textarea id="new-char-persona" placeholder="เช่น เป็นแมวขี้อ้อน, เป็นหนุ่มมาดกวน..."></textarea>
-                    </div>
+                    <div class="form-group"><label>ชื่อตัวละคร</label><input type="text" id="new-char-name" required></div>
+                    <div class="form-group"><label>URL รูปภาพ</label><input type="url" id="new-char-url" required></div>
+                    <div class="form-group"><label>Persona</label><textarea id="new-char-persona"></textarea></div>
                     <div class="form-actions">
                         <button type="button" id="back-to-selection" class="btn-secondary">ยกเลิก</button>
                         <button type="submit" class="btn-primary">สร้างตัวละคร ✨</button>
@@ -128,9 +139,7 @@
         </div>
     </div>
 
-    <!-- Notification -->
     <div id="notification" class="hidden"></div>
-
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>

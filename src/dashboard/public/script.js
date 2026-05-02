@@ -3,28 +3,35 @@ let currentChannelId = null;
 let selectedCharacterId = null;
 let characters = [];
 let mentionableItems = [];
-let allTextChannels = []; // For #autocomplete
+let allTextChannels = [];
 let messageCache = {};
 let selectedFiles = [];
 
 const socket = io();
 
+// UI Elements
 const guildList = document.getElementById('guild-list');
 const channelList = document.getElementById('channel-list');
 const messageLog = document.getElementById('message-log');
 const messageInput = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
-const currentGuildName = document.getElementById('current-guild-name');
 const currentChannelName = document.getElementById('current-channel-name');
 const memberList = document.getElementById('member-list');
 
-// Autocomplete
+// Mention/Channel Autocomplete
 const mentionAutocomplete = document.getElementById('mention-autocomplete');
-let autocompleteType = 'mention'; // 'mention' (@) or 'channel' (#)
+let autocompleteType = 'mention';
 let mentionSearchQuery = '';
 let selectedMentionIndex = 0;
 
-// UI Elements
+// Views
+const chatView = document.getElementById('chat-view');
+const toolsView = document.getElementById('tools-view');
+const openToolsBtn = document.getElementById('open-tools');
+const closeToolsBtn = document.getElementById('close-tools');
+const goHomeBtn = document.getElementById('go-home');
+
+// Character Modal
 const charModal = document.getElementById('char-modal');
 const modalTitle = document.getElementById('modal-title');
 const charGrid = document.getElementById('char-grid');
@@ -35,18 +42,27 @@ const charSelectionView = document.getElementById('char-selection-view');
 const charCreateView = document.getElementById('char-create-view');
 const backToSelectionBtn = document.getElementById('back-to-selection');
 const createCharForm = document.getElementById('create-char-form');
+
+// File Upload
 const triggerUpload = document.getElementById('trigger-upload');
 const fileInput = document.getElementById('file-input');
 const attachmentPreviews = document.getElementById('attachment-previews');
 
-// ── Utility ──
+// Music Downloader
+const musicUrlInput = document.getElementById('music-url');
+const fetchMusicBtn = document.getElementById('fetch-music-btn');
+const musicPreview = document.getElementById('music-preview');
+const downloadStatus = document.getElementById('download-status');
+const statusText = document.getElementById('status-text');
+
+// ── Utility: Fetch with Retry ──
 async function fetchWithRetry(url, options = {}, retries = 3, backoff = 1000) {
     try {
         const response = await fetch(url, options);
         if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
         return await response.json();
     } catch (error) {
-        if (retries > 0) { await new Promise(resolve => setTimeout(resolve, backoff)); return fetchWithRetry(url, options, retries - 1, backoff * 2); }
+        if (retries > 0) { await new Promise(res => setTimeout(res, backoff)); return fetchWithRetry(url, options, retries - 1, backoff * 2); }
         throw error;
     }
 }
@@ -54,17 +70,21 @@ async function fetchWithRetry(url, options = {}, retries = 3, backoff = 1000) {
 // ── Initialization ──
 document.addEventListener('DOMContentLoaded', () => { fetchGuilds(); });
 
-// ── Socket Events ──
-socket.on('new_message', (msg) => {
-    if (messageCache[currentChannelId]) {
-        messageCache[currentChannelId].messages.push(msg);
-        if (messageCache[currentChannelId].messages.length > 150) messageCache[currentChannelId].messages.shift();
-    }
-    appendMessage(msg);
-});
-socket.on('voice_update', (guildId) => { if (currentGuildId === guildId) fetchChannels(guildId, true); });
+// ── View Management ──
+function showView(viewId) {
+    [chatView, toolsView].forEach(v => v.classList.add('d-none'));
+    document.getElementById(viewId).classList.remove('d-none');
+    
+    // Sidebar indicators
+    openToolsBtn.classList.toggle('active', viewId === 'tools-view');
+    goHomeBtn.classList.toggle('active', viewId === 'chat-view');
+}
 
-// ── API Functions ──
+openToolsBtn.onclick = () => showView('tools-view');
+closeToolsBtn.onclick = () => showView('chat-view');
+goHomeBtn.onclick = () => showView('chat-view');
+
+// ── Guilds & Channels ──
 async function fetchGuilds() {
     try {
         const guilds = await fetchWithRetry('/api/guilds');
@@ -74,308 +94,226 @@ async function fetchGuilds() {
             div.className = 'guild-icon';
             div.title = guild.name;
             div.innerHTML = guild.icon ? `<img src="${guild.icon}" alt="${guild.name}">` : `<span>${guild.name.charAt(0)}</span>`;
-            div.addEventListener('click', () => selectGuild(guild.id, guild.name, div));
+            div.onclick = () => selectGuild(guild.id, guild.name, div);
             guildList.appendChild(div);
         });
-    } catch (error) { showNotification('โหลดเซิร์ฟเวอร์ไม่สำเร็จเมี๊ยว 😿'); }
+    } catch (e) { showNotification('โหลดเซิร์ฟเวอร์ล้มเหลว 😿'); }
 }
 
-async function selectGuild(guildId, guildName, element) {
+async function selectGuild(guildId, guildName, el) {
     currentGuildId = guildId;
-    currentGuildName.textContent = guildName;
-    document.querySelectorAll('.guild-icon').forEach(el => el.classList.remove('active'));
-    element.classList.add('active');
-    if (currentChannelId) socket.emit('leave_channel', currentChannelId);
-    currentChannelId = null;
-    currentChannelName.textContent = 'ยังไม่ได้เลือกห้อง';
-    messageInput.disabled = true;
-    sendBtn.disabled = true;
-    messageLog.innerHTML = '<div class="welcome-container"><h3>กรุณาเลือกห้องแชทเมี๊ยว 🐾</h3></div>';
+    document.querySelectorAll('.guild-icon').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('current-guild-display').textContent = guildName;
     fetchChannels(guildId);
     fetchCharacters(guildId);
     fetchMembers(guildId);
+    showView('chat-view');
 }
 
-async function fetchChannels(guildId, silent = false) {
+async function fetchChannels(guildId) {
     try {
-        if (!silent) channelList.innerHTML = '<div class="empty-state">กำลังโหลดห้อง...</div>';
-        const data = await fetchWithRetry(`/api/channels/${guildId}`);
-        allTextChannels = data.filter(c => c.type === 0); // Store for #autocomplete
-        renderChannels(data);
-    } catch (error) { if (!silent) showNotification('โหลดห้องไม่สำเร็จเมี๊ยว 😿'); }
+        const channels = await fetchWithRetry(`/api/channels/${guildId}`);
+        allTextChannels = channels.filter(c => c.type === 0);
+        renderChannels(channels);
+    } catch (e) { showNotification('โหลดห้องไม่สำเร็จ 😿'); }
 }
 
 function renderChannels(channels) {
-    const activeId = currentChannelId;
     channelList.innerHTML = '';
-    channels.forEach(channel => {
-        const isVoice = channel.type === 2;
+    channels.forEach(c => {
+        const isVoice = c.type === 2;
         const div = document.createElement('div');
-        div.className = `channel-item ${activeId === channel.id ? 'active' : ''}`;
-        div.innerHTML = `<i class="fa-solid ${isVoice ? 'fa-volume-high' : 'fa-hashtag'}"></i> ${channel.name}`;
-        if (!isVoice) div.addEventListener('click', () => selectChannel(channel.id, channel.name, div));
+        div.className = `channel-item ${currentChannelId === c.id ? 'active' : ''}`;
+        div.innerHTML = `<i class="fa-solid ${isVoice ? 'fa-volume-high' : 'fa-hashtag'}"></i> ${c.name}`;
+        if (!isVoice) div.onclick = () => selectChannel(c.id, c.name, div);
         channelList.appendChild(div);
-        if (isVoice && channel.members && channel.members.length > 0) {
-            const membersDiv = document.createElement('div');
-            membersDiv.className = 'voice-members';
-            channel.members.forEach(m => {
-                const mDiv = document.createElement('div');
-                mDiv.className = 'voice-member';
-                mDiv.innerHTML = `<img src="${m.avatar}" alt="${m.displayName}"><span>${m.displayName}</span>`;
-                membersDiv.appendChild(mDiv);
+        
+        if (isVoice && c.members?.length > 0) {
+            const vDiv = document.createElement('div');
+            vDiv.className = 'voice-members';
+            c.members.forEach(m => {
+                vDiv.innerHTML += `<div class="voice-member"><img src="${m.avatar}"><span>${m.displayName}</span></div>`;
             });
-            channelList.appendChild(membersDiv);
+            channelList.appendChild(vDiv);
         }
     });
 }
 
-function selectChannel(channelId, channelName, element) {
+async function selectChannel(id, name, el) {
     if (currentChannelId) socket.emit('leave_channel', currentChannelId);
-    currentChannelId = channelId;
-    currentChannelName.textContent = channelName;
-    
-    // Highlight in list
-    document.querySelectorAll('.channel-item').forEach(el => {
-        el.classList.remove('active');
-        if (el.textContent.includes(channelName)) el.classList.add('active');
-    });
-
+    currentChannelId = id;
+    currentChannelName.textContent = name;
+    document.querySelectorAll('.channel-item').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
     messageInput.disabled = false;
     sendBtn.disabled = false;
-    messageInput.placeholder = `ส่งข้อความถึง #${channelName}`;
-    messageInput.focus();
-    socket.emit('join_channel', channelId);
-    const cached = messageCache[channelId];
-    if (cached && (Date.now() - cached.lastFetched < 30000)) {
-        renderMessages(cached.messages);
-        fetchMessages(currentGuildId, channelId, true);
-    } else { fetchMessages(currentGuildId, channelId); }
+    messageInput.placeholder = `ส่งข้อความถึง #${name}`;
+    socket.emit('join_channel', id);
+    fetchMessages(id);
 }
 
-async function fetchMessages(guildId, channelId, background = false) {
+async function fetchMessages(id) {
     try {
-        if (!background) messageLog.innerHTML = '<div class="empty-state">กำลังดึงประวัติการแชท...</div>';
-        const messages = await fetchWithRetry(`/api/messages/${guildId}/${channelId}`);
-        messageCache[channelId] = { messages: messages, lastFetched: Date.now() };
-        renderMessages(messages);
-    } catch (error) { if (!background) showNotification('โหลดประวัติไม่สำเร็จเมี๊ยว 😿'); }
+        const msgs = await fetchWithRetry(`/api/messages/${currentGuildId}/${id}`);
+        renderMessages(msgs);
+    } catch (e) { showNotification('โหลดประวัติล้มเหลว 😿'); }
 }
 
-function renderMessages(messages) {
-    messageLog.innerHTML = '';
-    if (messages.length === 0) { messageLog.innerHTML = '<div class="empty-state">ยังไม่มีข้อความในห้องนี้เมี๊ยว</div>'; return; }
-    messages.forEach(msg => appendMessage(msg, false));
+function renderMessages(msgs) {
+    messageLog.innerHTML = msgs.length ? '' : '<div class="empty-state">ยังไม่มีข้อความเมี๊ยว</div>';
+    msgs.forEach(m => appendMessage(m, false));
     messageLog.scrollTop = messageLog.scrollHeight;
 }
 
-function appendMessage(msg, scroll = true) {
-    const item = document.createElement('div');
-    item.className = 'message-item';
-    const date = new Date(msg.timestamp);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()];
-    const year = date.getFullYear();
-    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-    const formattedDate = `${day}-${month}-${year} ${time}`;
-    let attachmentsHtml = msg.attachments && msg.attachments.length > 0 ? `<div class="message-attachments">${msg.attachments.map(a => `<img class="message-image" src="${a.url}" alt="${a.name}" onclick="window.open('${a.url}')">`).join('')}</div>` : '';
-    let embedsHtml = msg.embeds && msg.embeds.length > 0 ? msg.embeds.map(e => `<div class="message-embed" style="border-left-color: ${e.color ? '#' + e.color.toString(16).padStart(6, '0') : 'var(--accent)'}">${e.title ? `<a href="${e.url || '#'}" class="embed-title">${e.title}</a>` : ''}${e.description ? `<div class="embed-description">${formatContent(e.description)}</div>` : ''}${e.fields && e.fields.length > 0 ? `<div class="embed-fields">${e.fields.map(f => `<div class="embed-field"><div class="embed-field-name">${f.name}</div><div class="embed-field-value">${formatContent(f.value)}</div></div>`).join('')}</div>` : ''}${e.image ? `<img src="${e.image}" class="embed-image" onclick="window.open('${e.image}')">` : ''}${e.footer ? `<div class="embed-footer">${e.footer}</div>` : ''}</div>`).join('') : '';
-    item.innerHTML = `<img class="message-avatar" src="${msg.author.avatar}" alt="Avatar"><div class="message-content-wrapper"><div class="message-author"><span class="name">${msg.author.name}</span>${msg.author.isBot ? '<span class="bot-tag">BOT</span>' : ''}<span class="time">${formattedDate}</span></div>${msg.content ? `<div class="message-text">${formatContent(msg.content)}</div>` : ''}${attachmentsHtml}${embedsHtml}</div>`;
-    messageLog.appendChild(item);
+function appendMessage(m, scroll = true) {
+    const div = document.createElement('div');
+    div.className = 'message-item';
+    const date = new Date(m.timestamp).toLocaleString();
+    let attachments = m.attachments?.map(a => `<img class="message-image" src="${a.url}" onclick="window.open('${a.url}')">`).join('') || '';
+    div.innerHTML = `<img class="message-avatar" src="${m.author.avatar}">
+        <div class="message-content-wrapper">
+            <div class="message-author"><span class="name">${m.author.name}</span><span class="time">${date}</span></div>
+            <div class="message-text">${formatContent(m.content)}</div>
+            ${attachments}
+        </div>`;
+    messageLog.appendChild(div);
     if (scroll) messageLog.scrollTop = messageLog.scrollHeight;
 }
 
-function formatContent(content) {
-    // Mentions
-    const mentionRegex = /(@[^\s]+)/g;
-    let formatted = content.replace(mentionRegex, '<span class="mention-text">$1</span>');
-    
-    // Channels #name (detect and make clickable)
-    const channelRegex = /(#[^\s]+)/g;
-    formatted = formatted.replace(channelRegex, (match) => {
-        const chanName = match.substring(1);
-        const chan = allTextChannels.find(c => c.name === chanName);
-        if (chan) return `<span class="mention-text channel-mention" onclick="selectChannel('${chan.id}', '${chan.name}', null)">${match}</span>`;
-        return match;
+function formatContent(c) {
+    if (!c) return '';
+    c = c.replace(/(@[^\s]+)/g, '<span class="mention-text">$1</span>');
+    c = c.replace(/(#[^\s]+)/g, match => {
+        const chan = allTextChannels.find(x => x.name === match.slice(1));
+        return chan ? `<span class="mention-text channel-mention" onclick="selectChannel('${chan.id}','${chan.name}',null)">${match}</span>` : match;
     });
-
-    return formatted.replace(/\n/g, '<br>');
+    return c.replace(/\n/g, '<br>');
 }
-
-// ── File Upload Logic ──
-triggerUpload.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => { const files = Array.from(e.target.files); selectedFiles = [...selectedFiles, ...files]; renderPreviews(); fileInput.value = ''; });
-function renderPreviews() {
-    if (selectedFiles.length === 0) { attachmentPreviews.classList.add('d-none'); attachmentPreviews.innerHTML = ''; return; }
-    attachmentPreviews.classList.remove('d-none');
-    attachmentPreviews.innerHTML = '';
-    selectedFiles.forEach((file, index) => {
-        const reader = new FileReader();
-        const div = document.createElement('div');
-        div.className = 'preview-item';
-        reader.onload = (e) => { div.innerHTML = `<img src="${e.target.result}" alt="${file.name}"><span class="file-name">${file.name}</span><div class="remove-preview" onclick="removeFile(${index})"><i class="fa-solid fa-xmark"></i></div>`; };
-        reader.readAsDataURL(file);
-        attachmentPreviews.appendChild(div);
-    });
-}
-window.removeFile = (index) => { selectedFiles.splice(index, 1); renderPreviews(); };
-
-// ── Autocomplete Logic (@ and #) ──
-messageInput.addEventListener('input', (e) => {
-    const value = e.target.value;
-    const cursorPosition = e.target.selectionStart;
-    const textBeforeCursor = value.substring(0, cursorPosition);
-    
-    const lastAt = textBeforeCursor.lastIndexOf('@');
-    const lastHash = textBeforeCursor.lastIndexOf('#');
-
-    if (lastAt !== -1 && lastAt > lastHash && !/\s/.test(textBeforeCursor.substring(lastAt + 1))) {
-        autocompleteType = 'mention';
-        mentionSearchQuery = textBeforeCursor.substring(lastAt + 1).toLowerCase();
-        renderAutocomplete();
-    } else if (lastHash !== -1 && lastHash > lastAt && !/\s/.test(textBeforeCursor.substring(lastHash + 1))) {
-        autocompleteType = 'channel';
-        mentionSearchQuery = textBeforeCursor.substring(lastHash + 1).toLowerCase();
-        renderAutocomplete();
-    } else {
-        hideAutocomplete();
-    }
-});
-
-function renderAutocomplete() {
-    let filtered = [];
-    if (autocompleteType === 'mention') {
-        filtered = mentionableItems.filter(m => m.name.toLowerCase().includes(mentionSearchQuery)).slice(0, 10);
-    } else {
-        filtered = allTextChannels.filter(c => c.name.toLowerCase().includes(mentionSearchQuery)).map(c => ({ name: c.name, type: 'channel', id: c.id })).slice(0, 10);
-    }
-
-    if (filtered.length === 0) return hideAutocomplete();
-    mentionAutocomplete.classList.remove('d-none');
-    mentionAutocomplete.innerHTML = '';
-    filtered.forEach((item, index) => {
-        const div = document.createElement('div');
-        div.className = `mention-item ${index === selectedMentionIndex ? 'selected' : ''}`;
-        let iconHtml = '';
-        if (item.type === 'member') iconHtml = `<img src="${item.avatar}" alt="${item.name}">`;
-        else if (item.type === 'role') iconHtml = `<div class="role-icon" style="background-color: ${item.color || '#fff'}"></div>`;
-        else if (item.type === 'channel') iconHtml = `<div class="special-icon"><i class="fa-solid fa-hashtag"></i></div>`;
-        else iconHtml = `<div class="special-icon"><i class="fa-solid fa-bullhorn"></i></div>`;
-        div.innerHTML = `${iconHtml}<span class="name" style="color: ${item.color || 'var(--text-primary)'}">${item.name}</span>`;
-        div.addEventListener('click', () => insertAutocomplete(item));
-        mentionAutocomplete.appendChild(div);
-    });
-}
-function hideAutocomplete() { mentionAutocomplete.classList.add('d-none'); selectedMentionIndex = 0; }
-
-function insertAutocomplete(item) {
-    const symbol = autocompleteType === 'mention' ? '@' : '#';
-    const value = messageInput.value;
-    const cursorPosition = messageInput.selectionStart;
-    const textBeforeCursor = value.substring(0, cursorPosition);
-    const textAfterCursor = value.substring(cursorPosition);
-    const lastSymbol = textBeforeCursor.lastIndexOf(symbol);
-    const newValue = textBeforeCursor.substring(0, lastSymbol) + symbol + item.name + ' ' + textAfterCursor;
-    messageInput.value = newValue;
-    hideAutocomplete();
-    messageInput.focus();
-}
-
-messageInput.addEventListener('keydown', (e) => {
-    if (!mentionAutocomplete.classList.contains('d-none')) {
-        const items = mentionAutocomplete.querySelectorAll('.mention-item');
-        if (e.key === 'ArrowDown') { e.preventDefault(); selectedMentionIndex = (selectedMentionIndex + 1) % items.length; renderAutocomplete(); }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); selectedMentionIndex = (selectedMentionIndex - 1 + items.length) % items.length; renderAutocomplete(); }
-        else if (e.key === 'Enter') { e.preventDefault(); const selectedItem = items[selectedMentionIndex]; if (selectedItem) selectedItem.click(); }
-        else if (e.key === 'Escape') { hideAutocomplete(); }
-    }
-});
 
 // ── Send Message ──
 async function sendMessage() {
-    let message = messageInput.value.trim();
-    if (!message && selectedFiles.length === 0) return;
-    if (!currentGuildId || !currentChannelId) return;
-
-    // Translation layer: @Name -> <@ID>, #Name -> <#ID>
-    mentionableItems.forEach(item => {
-        const regex = new RegExp(`@${item.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
-        if (item.type === 'member') message = message.replace(regex, `<@${item.id}>`);
-        else if (item.type === 'role') message = message.replace(regex, `<@&${item.id}>`);
+    let msg = messageInput.value.trim();
+    if (!msg && selectedFiles.length === 0) return;
+    
+    // Translation
+    mentionableItems.forEach(i => {
+        const r = new RegExp(`@${i.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+        msg = msg.replace(r, i.type === 'member' ? `<@${i.id}>` : `<@&${i.id}>`);
     });
-    allTextChannels.forEach(chan => {
-        const regex = new RegExp(`#${chan.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
-        message = message.replace(regex, `<#${chan.id}>`);
+    allTextChannels.forEach(c => {
+        const r = new RegExp(`#${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+        msg = msg.replace(r, `<#${c.id}>`);
     });
 
-    sendBtn.disabled = true;
-    const formData = new FormData();
-    formData.append('guildId', currentGuildId);
-    formData.append('channelId', currentChannelId);
-    formData.append('characterId', selectedCharacterId || '');
-    formData.append('message', message);
-    selectedFiles.forEach(file => formData.append('files', file));
+    const form = new FormData();
+    form.append('guildId', currentGuildId);
+    form.append('channelId', currentChannelId);
+    form.append('characterId', selectedCharacterId || '');
+    form.append('message', msg);
+    selectedFiles.forEach(f => form.append('files', f));
+
     try {
-        const result = await fetchWithRetry('/api/speak', { method: 'POST', body: formData });
-        if (result.success) { messageInput.value = ''; selectedFiles = []; renderPreviews(); showNotification('ส่งข้อความสำเร็จแล้วเมี๊ยวว! ✨'); }
-    } catch (error) { showNotification(`เกิดข้อผิดพลาด: ${error.message}`); } finally { sendBtn.disabled = false; messageInput.focus(); }
+        const res = await fetch('/api/speak', { method: 'POST', body: form });
+        if (res.ok) { messageInput.value = ''; selectedFiles = []; renderPreviews(); }
+    } catch (e) { showNotification('ส่งข้อความล้มเหลว 😿'); }
 }
 
-// ── Characters & Members Logic ──
-async function fetchCharacters(guildId) { try { const data = await fetchWithRetry(`/api/characters/${guildId}`); characters = data; renderCharacterGrid(); } catch (error) { console.error(error); } }
+sendBtn.onclick = sendMessage;
+messageInput.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+
+// ── Music Downloader ──
+fetchMusicBtn.onclick = async () => {
+    const url = musicUrlInput.value.trim();
+    if (!url) return showNotification('กรุณาใส่ลิงก์ก่อนเมี๊ยว!');
+
+    musicPreview.classList.add('d-none');
+    downloadStatus.classList.remove('d-none');
+    statusText.textContent = 'กำลังตรวจสอบลิงก์...';
+
+    try {
+        const info = await fetchWithRetry(`/api/music/info?url=${encodeURIComponent(url)}`);
+        downloadStatus.classList.add('d-none');
+        musicPreview.classList.remove('d-none');
+        musicPreview.innerHTML = `
+            <img src="${info.thumbnail}" alt="Thumbnail">
+            <div class="music-info">
+                <div class="title">${info.title}</div>
+                <div class="author">${info.author} • ${info.duration}</div>
+                <button class="download-btn" id="start-download-btn">
+                    <i class="fa-solid fa-download"></i> ดาวน์โหลด MP3
+                </button>
+            </div>
+        `;
+        document.getElementById('start-download-btn').onclick = () => {
+            window.location.href = `/api/music/download?url=${encodeURIComponent(url)}&title=${encodeURIComponent(info.title)}`;
+            showNotification('กำลังเริ่มดาวน์โหลด... กรุณารอสักครู่เมี๊ยว! 🎶');
+        };
+    } catch (e) {
+        downloadStatus.classList.add('d-none');
+        showNotification('ตรวจสอบลิงก์ไม่สำเร็จ หรือไม่รองรับเมี๊ยว 😿');
+    }
+};
+
+// ── Characters ──
+async function fetchCharacters(gid) {
+    try {
+        characters = await fetchWithRetry(`/api/characters/${gid}`);
+        renderCharacterGrid();
+    } catch (e) {}
+}
 function renderCharacterGrid() {
-    charGrid.innerHTML = '';
-    const defaultCard = document.createElement('div');
-    defaultCard.className = `char-card ${!selectedCharacterId ? 'active' : ''}`;
-    defaultCard.innerHTML = `<img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Default"><span>บอทหลัก (Default)</span>`;
-    defaultCard.onclick = () => selectCharacter(null);
-    charGrid.appendChild(defaultCard);
-    characters.forEach(char => {
-        const div = document.createElement('div'); div.className = `char-card ${selectedCharacterId === char.id ? 'active' : ''}`;
-        div.innerHTML = `<img src="${char.image_url || 'https://cdn.discordapp.com/embed/avatars/0.png'}" alt="${char.name}"><span>${char.name}</span>`;
-        div.addEventListener('click', () => selectCharacter(char));
+    charGrid.innerHTML = `<div class="char-card ${!selectedCharacterId ? 'active' : ''}" onclick="selectCharacter(null)">
+        <img src="https://cdn.discordapp.com/embed/avatars/0.png"><span>บอทหลัก</span>
+    </div>`;
+    characters.forEach(c => {
+        const div = document.createElement('div');
+        div.className = `char-card ${selectedCharacterId === c.id ? 'active' : ''}`;
+        div.innerHTML = `<img src="${c.image_url}"><span>${c.name}</span>`;
+        div.onclick = () => selectCharacter(c);
         charGrid.appendChild(div);
     });
-    const addCard = document.createElement('div'); addCard.className = 'char-card add-card'; addCard.innerHTML = `<i class="fa-solid fa-plus"></i><span>เพิ่มบทบาทใหม่</span>`; addCard.onclick = openCreateView; charGrid.appendChild(addCard);
+    const add = document.createElement('div');
+    add.className = 'char-card add-card';
+    add.innerHTML = '<i class="fa-solid fa-plus"></i><span>เพิ่มบทบาท</span>';
+    add.onclick = () => { charSelectionView.classList.add('d-none'); charCreateView.classList.remove('d-none'); };
+    charGrid.appendChild(add);
 }
-function selectCharacter(char) {
-    if (!char) { selectedCharacterId = null; currentCharAvatar.src = 'https://cdn.discordapp.com/embed/avatars/0.png'; }
-    else { selectedCharacterId = char.id; currentCharAvatar.src = char.image_url || 'https://cdn.discordapp.com/embed/avatars/0.png'; }
-    renderCharacterGrid(); closeModal();
+function selectCharacter(c) {
+    selectedCharacterId = c?.id || null;
+    currentCharAvatar.src = c?.image_url || 'https://cdn.discordapp.com/embed/avatars/0.png';
+    closeModal();
 }
-function openCreateView() { charSelectionView.classList.add('d-none'); charCreateView.classList.remove('d-none'); modalTitle.textContent = 'สร้างตัวละครใหม่'; }
-function showSelectionView() { charCreateView.classList.add('d-none'); charSelectionView.classList.remove('d-none'); modalTitle.textContent = 'เลือกตัวละครที่จะสวมบทบาท'; }
-openModalBtn.addEventListener('click', () => { if (!currentGuildId) return showNotification('กรุณาเลือกเซิร์ฟเวอร์ก่อนเมี๊ยว!'); charModal.classList.remove('hidden'); showSelectionView(); });
-closeModalBtn.addEventListener('click', closeModal); backToSelectionBtn.addEventListener('click', showSelectionView); charModal.addEventListener('click', (e) => { if (e.target === charModal) closeModal(); });
+openModalBtn.onclick = () => { charModal.classList.remove('hidden'); charSelectionView.classList.remove('d-none'); charCreateView.classList.add('d-none'); };
+closeModalBtn.onclick = closeModal;
 function closeModal() { charModal.classList.add('hidden'); }
-createCharForm.addEventListener('submit', async (e) => {
-    e.preventDefault(); const name = document.getElementById('new-char-name').value, url = document.getElementById('new-char-url').value, persona = document.getElementById('new-char-persona').value;
-    try { const result = await fetchWithRetry('/api/characters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId: currentGuildId, name, imageUrl: url, persona }) }); if (result) { showNotification('สร้างตัวละครสำเร็จแล้วเมี๊ยว! ✨'); createCharForm.reset(); fetchCharacters(currentGuildId); showSelectionView(); } } catch (error) { showNotification('เกิดข้อผิดพลาดในการสร้างตัวละคร 😿'); }
-});
 
-async function fetchMembers(guildId) {
+// ── Members ──
+async function fetchMembers(gid) {
     try {
-        memberList.innerHTML = '<div class="empty-state">กำลังโหลดสมาชิก...</div>';
-        const data = await fetchWithRetry(`/api/members/${guildId}`);
-        mentionableItems = [{ id: 'everyone', name: 'everyone', type: 'special', color: '#fff' }, { id: 'here', name: 'here', type: 'special', color: '#fff' }];
-        data.roles.forEach(r => mentionableItems.push({ id: r.id, name: r.name, color: r.color, type: 'role' }));
-        const members = data.groups.flatMap(g => g.members);
-        members.forEach(m => mentionableItems.push({ id: m.id, name: m.displayName, avatar: m.avatar, color: m.color, type: 'member' }));
+        const data = await fetchWithRetry(`/api/members/${gid}`);
+        mentionableItems = [{id:'everyone', name:'everyone', type:'special'}, {id:'here', name:'here', type:'special'}];
+        data.roles.forEach(r => mentionableItems.push({...r, type:'role'}));
+        data.groups.flatMap(g => g.members).forEach(m => mentionableItems.push({...m, name:m.displayName, type:'member'}));
         renderMembers(data.groups);
-    } catch (error) { showNotification('โหลดสมาชิกไม่สำเร็จเมี๊ยว 😿'); }
+    } catch (e) {}
 }
 function renderMembers(groups) {
     memberList.innerHTML = '';
-    groups.forEach(group => {
-        const header = document.createElement('div'); header.className = 'role-header'; header.textContent = `${group.roleName} — ${group.members.length}`; memberList.appendChild(header);
-        group.members.forEach(member => {
-            const div = document.createElement('div'); div.className = 'member-item';
-            div.innerHTML = `<div class="member-avatar-wrapper"><img src="${member.avatar}" alt="${member.displayName}"><div class="status-dot status-${member.status}"></div></div><span class="member-name" style="color: ${member.color || 'var(--text-muted)'}">${member.displayName}</span>`;
-            memberList.appendChild(div);
+    groups.forEach(g => {
+        memberList.innerHTML += `<div class="role-header">${g.roleName} — ${g.members.length}</div>`;
+        g.members.forEach(m => {
+            memberList.innerHTML += `<div class="member-item"><img src="${m.avatar}"><span style="color:${m.color}">${m.displayName}</span></div>`;
         });
     });
 }
 
-// ── UI Events ──
-sendBtn.addEventListener('click', sendMessage);
-messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && mentionAutocomplete.classList.contains('d-none')) { e.preventDefault(); sendMessage(); } });
-function showNotification(text) { const notification = document.getElementById('notification'); notification.textContent = text; notification.classList.remove('hidden'); setTimeout(() => { notification.classList.add('hidden'); }, 3000); }
+// ── Notification ──
+function showNotification(t) {
+    const n = document.getElementById('notification');
+    n.textContent = t; n.classList.remove('hidden');
+    setTimeout(() => n.classList.add('hidden'), 3000);
+}
+
+// ── Socket ──
+socket.on('new_message', m => appendMessage(m));
