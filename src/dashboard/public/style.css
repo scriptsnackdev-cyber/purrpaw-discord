@@ -30,7 +30,6 @@ body {
 .app-container {
     display: flex;
     height: 100%;
-    width: 100vw;
 }
 
 /* ── Guild Sidebar ── */
@@ -213,29 +212,12 @@ body {
     color: var(--text-muted);
 }
 
-/* ── Main Content Area ── */
-.main-content {
+/* ── Chat Area ── */
+.chat-area {
     flex: 1;
-    display: flex;
-    flex-direction: column;
     background-color: var(--bg-chat);
-    min-width: 0;
-}
-
-.view-container {
     display: flex;
     flex-direction: column;
-    height: 100%;
-}
-
-/* ── Member Sidebar ── */
-.member-sidebar {
-    width: 240px;
-    background-color: var(--bg-sidebar);
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    border-left: 1px solid rgba(0,0,0,0.2);
 }
 
 .chat-header {
@@ -263,14 +245,15 @@ body {
     display: none; /* Removed from header */
 }
 
-.message-log {
+.message-display {
     flex: 1;
-    padding: 20px;
+    padding: 16px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
     gap: 16px;
-    scroll-behavior: smooth;
 }
 
 .message-item {
@@ -571,184 +554,6 @@ body {
     font-size: 12px;
     color: var(--text-muted);
 }
-
-/* ── Tools View ── */
-.tools-content {
-    padding: 30px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    height: calc(100vh - 50px);
-    overflow-y: auto;
-}
-
-.tool-card {
-    background: var(--bg-secondary);
-    border-radius: 12px;
-    padding: 24px;
-    width: 100%;
-    max-width: 500px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: transform 0.2s, border-color 0.2s;
-}
-
-.tool-card:hover {
-    border-color: var(--accent);
-}
-
-.tool-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
-}
-
-.tool-header i {
-    font-size: 20px;
-    color: var(--accent);
-}
-
-.tool-header h3 {
-    font-size: 18px;
-    font-weight: 600;
-}
-
-.tool-desc {
-    font-size: 14px;
-    color: var(--text-muted);
-    margin-bottom: 20px;
-}
-
-.download-input-group {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.download-input-group input {
-    flex: 1;
-    background: var(--bg-tertiary);
-    border: 1px solid transparent;
-    padding: 12px 16px;
-    border-radius: 8px;
-    color: white;
-    font-family: inherit;
-    outline: none;
-}
-
-.download-input-group input:focus {
-    border-color: var(--accent);
-}
-
-.download-input-group button {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 0 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-
-.download-input-group button:hover {
-    opacity: 0.9;
-}
-
-.music-preview {
-    background: var(--bg-tertiary);
-    border-radius: 10px;
-    padding: 16px;
-    display: flex;
-    gap: 16px;
-    margin-bottom: 20px;
-    animation: fadeIn 0.3s ease;
-}
-
-.music-preview img {
-    width: 80px;
-    height: 80px;
-    object-fit: cover;
-    border-radius: 6px;
-}
-
-.music-info {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 5px;
-    flex: 1;
-}
-
-.music-info .title {
-    font-weight: 600;
-    font-size: 15px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.music-info .author {
-    font-size: 13px;
-    color: var(--text-muted);
-}
-
-.download-btn {
-    width: 100%;
-    padding: 12px;
-    background: #22c55e;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-
-.download-status {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 15px;
-    padding: 20px;
-    background: rgba(255,255,255,0.03);
-    border-radius: 10px;
-}
-
-.loader-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(255,255,255,0.1);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-.close-tools-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    font-size: 20px;
-    cursor: pointer;
-    margin-left: auto;
-    padding: 10px;
-}
-
-.close-tools-btn:hover { color: white; }
-
-.tool-icon {
-    color: var(--text-muted);
-}
-
-.tool-icon:hover { color: var(--accent); }
-.tool-icon.active { color: var(--accent); background: var(--bg-tertiary); }
 
 /* ── Input Area ── */
 .input-area {
