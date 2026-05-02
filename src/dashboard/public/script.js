@@ -3,6 +3,7 @@ let currentChannelId = null;
 let selectedCharacterId = null;
 let characters = [];
 let mentionableItems = [];
+let allTextChannels = []; // For #autocomplete
 let messageCache = {};
 let selectedFiles = [];
 
@@ -17,8 +18,9 @@ const currentGuildName = document.getElementById('current-guild-name');
 const currentChannelName = document.getElementById('current-channel-name');
 const memberList = document.getElementById('member-list');
 
-// Mention Autocomplete
+// Autocomplete
 const mentionAutocomplete = document.getElementById('mention-autocomplete');
+let autocompleteType = 'mention'; // 'mention' (@) or 'channel' (#)
 let mentionSearchQuery = '';
 let selectedMentionIndex = 0;
 
@@ -37,17 +39,14 @@ const triggerUpload = document.getElementById('trigger-upload');
 const fileInput = document.getElementById('file-input');
 const attachmentPreviews = document.getElementById('attachment-previews');
 
-// ── Utility: Fetch with Exponential Backoff ──
+// ── Utility ──
 async function fetchWithRetry(url, options = {}, retries = 3, backoff = 1000) {
     try {
         const response = await fetch(url, options);
         if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
         return await response.json();
     } catch (error) {
-        if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, backoff));
-            return fetchWithRetry(url, options, retries - 1, backoff * 2);
-        }
+        if (retries > 0) { await new Promise(resolve => setTimeout(resolve, backoff)); return fetchWithRetry(url, options, retries - 1, backoff * 2); }
         throw error;
     }
 }
@@ -101,6 +100,7 @@ async function fetchChannels(guildId, silent = false) {
     try {
         if (!silent) channelList.innerHTML = '<div class="empty-state">กำลังโหลดห้อง...</div>';
         const data = await fetchWithRetry(`/api/channels/${guildId}`);
+        allTextChannels = data.filter(c => c.type === 0); // Store for #autocomplete
         renderChannels(data);
     } catch (error) { if (!silent) showNotification('โหลดห้องไม่สำเร็จเมี๊ยว 😿'); }
 }
@@ -133,8 +133,13 @@ function selectChannel(channelId, channelName, element) {
     if (currentChannelId) socket.emit('leave_channel', currentChannelId);
     currentChannelId = channelId;
     currentChannelName.textContent = channelName;
-    document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
-    element.classList.add('active');
+    
+    // Highlight in list
+    document.querySelectorAll('.channel-item').forEach(el => {
+        el.classList.remove('active');
+        if (el.textContent.includes(channelName)) el.classList.add('active');
+    });
+
     messageInput.disabled = false;
     sendBtn.disabled = false;
     messageInput.placeholder = `ส่งข้อความถึง #${channelName}`;
@@ -180,8 +185,19 @@ function appendMessage(msg, scroll = true) {
 }
 
 function formatContent(content) {
+    // Mentions
     const mentionRegex = /(@[^\s]+)/g;
     let formatted = content.replace(mentionRegex, '<span class="mention-text">$1</span>');
+    
+    // Channels #name (detect and make clickable)
+    const channelRegex = /(#[^\s]+)/g;
+    formatted = formatted.replace(channelRegex, (match) => {
+        const chanName = match.substring(1);
+        const chan = allTextChannels.find(c => c.name === chanName);
+        if (chan) return `<span class="mention-text channel-mention" onclick="selectChannel('${chan.id}', '${chan.name}', null)">${match}</span>`;
+        return match;
+    });
+
     return formatted.replace(/\n/g, '<br>');
 }
 
@@ -203,55 +219,74 @@ function renderPreviews() {
 }
 window.removeFile = (index) => { selectedFiles.splice(index, 1); renderPreviews(); };
 
-// ── Mention Autocomplete Logic ──
+// ── Autocomplete Logic (@ and #) ──
 messageInput.addEventListener('input', (e) => {
     const value = e.target.value;
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = value.substring(0, cursorPosition);
-    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-    if (lastAtSymbol !== -1 && !/\s/.test(textBeforeCursor.substring(lastAtSymbol + 1))) {
-        mentionSearchQuery = textBeforeCursor.substring(lastAtSymbol + 1).toLowerCase();
-        renderMentionAutocomplete();
-    } else { hideMentionAutocomplete(); }
+    
+    const lastAt = textBeforeCursor.lastIndexOf('@');
+    const lastHash = textBeforeCursor.lastIndexOf('#');
+
+    if (lastAt !== -1 && lastAt > lastHash && !/\s/.test(textBeforeCursor.substring(lastAt + 1))) {
+        autocompleteType = 'mention';
+        mentionSearchQuery = textBeforeCursor.substring(lastAt + 1).toLowerCase();
+        renderAutocomplete();
+    } else if (lastHash !== -1 && lastHash > lastAt && !/\s/.test(textBeforeCursor.substring(lastHash + 1))) {
+        autocompleteType = 'channel';
+        mentionSearchQuery = textBeforeCursor.substring(lastHash + 1).toLowerCase();
+        renderAutocomplete();
+    } else {
+        hideAutocomplete();
+    }
 });
 
-function renderMentionAutocomplete() {
-    const filtered = mentionableItems.filter(m => m.name.toLowerCase().includes(mentionSearchQuery));
-    if (filtered.length === 0) return hideMentionAutocomplete();
+function renderAutocomplete() {
+    let filtered = [];
+    if (autocompleteType === 'mention') {
+        filtered = mentionableItems.filter(m => m.name.toLowerCase().includes(mentionSearchQuery)).slice(0, 10);
+    } else {
+        filtered = allTextChannels.filter(c => c.name.toLowerCase().includes(mentionSearchQuery)).map(c => ({ name: c.name, type: 'channel', id: c.id })).slice(0, 10);
+    }
+
+    if (filtered.length === 0) return hideAutocomplete();
     mentionAutocomplete.classList.remove('d-none');
     mentionAutocomplete.innerHTML = '';
-    filtered.slice(0, 10).forEach((item, index) => {
+    filtered.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = `mention-item ${index === selectedMentionIndex ? 'selected' : ''}`;
         let iconHtml = '';
         if (item.type === 'member') iconHtml = `<img src="${item.avatar}" alt="${item.name}">`;
         else if (item.type === 'role') iconHtml = `<div class="role-icon" style="background-color: ${item.color || '#fff'}"></div>`;
+        else if (item.type === 'channel') iconHtml = `<div class="special-icon"><i class="fa-solid fa-hashtag"></i></div>`;
         else iconHtml = `<div class="special-icon"><i class="fa-solid fa-bullhorn"></i></div>`;
         div.innerHTML = `${iconHtml}<span class="name" style="color: ${item.color || 'var(--text-primary)'}">${item.name}</span>`;
-        div.addEventListener('click', () => insertMention(item.name));
+        div.addEventListener('click', () => insertAutocomplete(item));
         mentionAutocomplete.appendChild(div);
     });
 }
-function hideMentionAutocomplete() { mentionAutocomplete.classList.add('d-none'); selectedMentionIndex = 0; }
-function insertMention(name) {
+function hideAutocomplete() { mentionAutocomplete.classList.add('d-none'); selectedMentionIndex = 0; }
+
+function insertAutocomplete(item) {
+    const symbol = autocompleteType === 'mention' ? '@' : '#';
     const value = messageInput.value;
     const cursorPosition = messageInput.selectionStart;
     const textBeforeCursor = value.substring(0, cursorPosition);
     const textAfterCursor = value.substring(cursorPosition);
-    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-    const newValue = textBeforeCursor.substring(0, lastAtSymbol) + '@' + name + ' ' + textAfterCursor;
+    const lastSymbol = textBeforeCursor.lastIndexOf(symbol);
+    const newValue = textBeforeCursor.substring(0, lastSymbol) + symbol + item.name + ' ' + textAfterCursor;
     messageInput.value = newValue;
-    hideMentionAutocomplete();
+    hideAutocomplete();
     messageInput.focus();
 }
 
 messageInput.addEventListener('keydown', (e) => {
     if (!mentionAutocomplete.classList.contains('d-none')) {
         const items = mentionAutocomplete.querySelectorAll('.mention-item');
-        if (e.key === 'ArrowDown') { e.preventDefault(); selectedMentionIndex = (selectedMentionIndex + 1) % items.length; renderMentionAutocomplete(); }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); selectedMentionIndex = (selectedMentionIndex - 1 + items.length) % items.length; renderMentionAutocomplete(); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); selectedMentionIndex = (selectedMentionIndex + 1) % items.length; renderAutocomplete(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); selectedMentionIndex = (selectedMentionIndex - 1 + items.length) % items.length; renderAutocomplete(); }
         else if (e.key === 'Enter') { e.preventDefault(); const selectedItem = items[selectedMentionIndex]; if (selectedItem) selectedItem.click(); }
-        else if (e.key === 'Escape') { hideMentionAutocomplete(); }
+        else if (e.key === 'Escape') { hideAutocomplete(); }
     }
 });
 
@@ -261,15 +296,15 @@ async function sendMessage() {
     if (!message && selectedFiles.length === 0) return;
     if (!currentGuildId || !currentChannelId) return;
 
-    // Convert @Name to <@ID> or <@&ID> before sending
+    // Translation layer: @Name -> <@ID>, #Name -> <#ID>
     mentionableItems.forEach(item => {
-        if (item.type === 'member') {
-            const regex = new RegExp(`@${item.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
-            message = message.replace(regex, `<@${item.id}>`);
-        } else if (item.type === 'role') {
-            const regex = new RegExp(`@${item.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
-            message = message.replace(regex, `<@&${item.id}>`);
-        }
+        const regex = new RegExp(`@${item.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+        if (item.type === 'member') message = message.replace(regex, `<@${item.id}>`);
+        else if (item.type === 'role') message = message.replace(regex, `<@&${item.id}>`);
+    });
+    allTextChannels.forEach(chan => {
+        const regex = new RegExp(`#${chan.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+        message = message.replace(regex, `<#${chan.id}>`);
     });
 
     sendBtn.disabled = true;
