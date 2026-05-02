@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PurrPaw Control Panel 🐾</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Sidebar: Servers -->
+        <nav class="guild-sidebar">
+            <div class="guild-icon home-icon active" title="Home">
+                <i class="fa-solid fa-paw"></i>
+            </div>
+            <div class="separator"></div>
+            <div id="guild-list">
+                <!-- Guilds will be loaded here -->
+            </div>
+        </nav>
+
+        <!-- Sidebar: Channels -->
+        <aside class="channel-sidebar">
+            <header class="sidebar-header">
+                <h1 id="current-guild-name">Select Server</h1>
+            </header>
+            <div class="channel-list" id="channel-list">
+                <div class="empty-state">กรุณาเลือกเซิร์ฟเวอร์ก่อนเมี๊ยว</div>
+            </div>
+            <div class="user-panel">
+                <div class="user-info">
+                    <img id="bot-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot Avatar">
+                    <div class="user-details">
+                        <span class="username">PurrPaw Bot</span>
+                        <span class="status">Online</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="channel-info">
+                    <i class="fa-solid fa-hashtag"></i>
+                    <h2 id="current-channel-name">ยังไม่ได้เลือกห้อง</h2>
+                </div>
+            </header>
+
+            <section class="message-display" id="message-log">
+                <div class="welcome-container">
+                    <i class="fa-solid fa-comments"></i>
+                    <h3>ยินดีต้อนรับสู่ PurrPaw Dashboard!</h3>
+                    <p>เลือกห้องทางซ้ายมือ และพิมพ์ข้อความในนาม AI Character ได้เลยเมี๊ยววว ✨</p>
+                </div>
+            </section>
+
+            <footer class="input-area">
+                <div class="input-wrapper">
+                    <!-- Mention Autocomplete -->
+                    <div id="mention-autocomplete" class="mention-autocomplete d-none"></div>
+
+                    <!-- Attachment Preview Area -->
+                    <div id="attachment-previews" class="attachment-previews d-none"></div>
+                    
+                    <div class="input-container">
+                        <button class="attach-btn" id="trigger-upload"><i class="fa-solid fa-circle-plus"></i></button>
+                        <input type="file" id="file-input" multiple accept="image/*" class="d-none">
+                        
+                        <div class="char-avatar-container" id="open-char-modal">
+                            <img id="current-char-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Character">
+                            <div class="char-badge"><i class="fa-solid fa-mask"></i></div>
+                        </div>
+                        <textarea id="message-input" placeholder="พิมพ์ข้อความที่นี่..." disabled></textarea>
+                        <button id="send-btn" disabled><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </footer>
+        </main>
+
+        <!-- Sidebar: Members -->
+        <aside class="member-sidebar">
+            <header class="sidebar-header">
+                <h3>สมาชิกเซิร์ฟเวอร์</h3>
+            </header>
+            <div class="member-list" id="member-list">
+                <div class="empty-state">กรุณาเลือกเซิร์ฟเวอร์</div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Character Selection Modal -->
+    <div id="char-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h3 id="modal-title">เลือกตัวละครที่จะสวมบทบาท</h3>
+                <button id="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            
+            <div id="char-selection-view">
+                <div class="char-grid" id="char-grid">
+                    <!-- Characters will be loaded here -->
+                </div>
+            </div>
+
+            <div id="char-create-view" class="d-none">
+                <form id="create-char-form" class="modal-form">
+                    <div class="form-group">
+                        <label>ชื่อตัวละคร</label>
+                        <input type="text" id="new-char-name" placeholder="เช่น Alan, Haru" required>
+                    </div>
+                    <div class="form-group">
+                        <label>URL รูปภาพ</label>
+                        <input type="url" id="new-char-url" placeholder="https://..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Persona (บทบาท/บุคลิก)</label>
+                        <textarea id="new-char-persona" placeholder="เช่น เป็นแมวขี้อ้อน, เป็นหนุ่มมาดกวน..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="back-to-selection" class="btn-secondary">ยกเลิก</button>
+                        <button type="submit" class="btn-primary">สร้างตัวละคร ✨</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="hidden"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
