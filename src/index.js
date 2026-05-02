@@ -28,20 +28,40 @@ if (isWindows && !fs.existsSync(YTDLP_PATH)) {
 }
 
 // ── Helper: เรียก yt-dlp แล้วรับ JSON กลับมา (มี timeout 30 วินาที) ──
-async function ytdlp(args) {
+// ── Helper: เรียก yt-dlp แล้วรับ JSON กลับมา (มี timeout 30 วินาที) ──
+async function ytdlp(args, useCookie = true) {
     const finalArgs = [...args];
     
-    // ถ้ามี Cookie ใน .env ให้ส่งไปด้วยเพื่อป้องกันโดน YouTube บล็อกบน VPS เมี๊ยว🐾
-    if (process.env.YOUTUBE_COOKIE) {
+    // ถ้ามี Cookie ใน .env และต้องการใช้ ให้ส่งไปด้วยเมี๊ยว🐾
+    if (useCookie && process.env.YOUTUBE_COOKIE) {
         finalArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
     }
 
-    const { stdout } = await execFileAsync(YTDLP_PATH, finalArgs, {
-        timeout: 30000,             // 30 วินาที ถ้านานกว่านี้ kill process
-        maxBuffer: 1024 * 1024 * 50, // 50MB buffer
-        windowsHide: true,
-    });
-    return JSON.parse(stdout);
+    // เพิ่ม flag พื้นฐานเพื่อความเสถียรเมี๊ยว🐾
+    finalArgs.push('--no-check-certificates');
+
+    try {
+        const { stdout } = await execFileAsync(YTDLP_PATH, finalArgs, {
+            timeout: 30000,             // 30 วินาที ถ้านานกว่านี้ kill process
+            maxBuffer: 1024 * 1024 * 50, // 50MB buffer
+            windowsHide: true,
+        });
+        
+        if (!stdout || !stdout.trim()) {
+            throw new Error('yt-dlp returned empty output');
+        }
+
+        return JSON.parse(stdout);
+    } catch (err) {
+        // 🚨 ถ้าล้มเหลวขณะใช้ Cookie ให้ลองอีกครั้งแบบไม่ใช้ Cookie เมี๊ยว🐾
+        // (หลายครั้งที่ Cookie หมดอายุหรือโดน YouTube บล็อกแบบเจาะจงบัญชี)
+        if (useCookie && process.env.YOUTUBE_COOKIE) {
+            console.warn(`[yt-dlp] Failed with cookie, retrying without cookie... Error: ${err.message}`);
+            return ytdlp(args, false);
+        }
+        
+        throw err;
+    }
 }
 
 // ── Custom yt-dlp Plugin สำหรับ DisTube v5 ──
@@ -63,7 +83,7 @@ const ytdlpPlugin = {
         console.log(`[yt-dlp] Resolving: ${cleanUrl}`);
 
         const info = await ytdlp([
-            '--dump-single-json', '--no-warnings', '--no-call-home',
+            '--dump-single-json', '--no-warnings',
             '--skip-download', '--simulate', '--no-playlist',
             cleanUrl,
         ]);
@@ -89,7 +109,7 @@ const ytdlpPlugin = {
         console.log(`[yt-dlp] Searching: ${query}`);
         try {
             const info = await ytdlp([
-                '--dump-single-json', '--no-warnings', '--no-call-home',
+                '--dump-single-json', '--no-warnings',
                 '--skip-download', '--simulate', '--no-playlist',
                 '--flat-playlist',
                 `ytsearch1:${query}`,
@@ -124,7 +144,7 @@ const ytdlpPlugin = {
     async getStreamURL(song) {
         console.log(`[yt-dlp] Getting stream URL: ${song.url}`);
         const info = await ytdlp([
-            '--dump-single-json', '--no-warnings', '--no-call-home',
+            '--dump-single-json', '--no-warnings',
             '--skip-download', '--simulate', '--no-playlist',
             '--format', 'ba/ba*',  // best audio only
             song.url,
@@ -142,7 +162,7 @@ const ytdlpPlugin = {
 
             // ใช้ YouTube Mix (RD playlist) เพื่อดึงเพลงแนะนำ
             const info = await ytdlp([
-                '--dump-single-json', '--no-warnings', '--no-call-home',
+                '--dump-single-json', '--no-warnings',
                 '--skip-download', '--simulate',
                 '--flat-playlist',
                 '--playlist-end', '6',  // ดึงแค่ 6 เพลง (เพลงแรกคือเพลงปัจจุบัน)
