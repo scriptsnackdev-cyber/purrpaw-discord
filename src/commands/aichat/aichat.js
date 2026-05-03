@@ -57,7 +57,11 @@ module.exports = {
                 .addStringOption(o => o.setName('image_url').setDescription('ลิงก์รูปภาพประกอบ Embed เมี๊ยว')))
         .addSubcommand(sub =>
             sub.setName('private-end')
-                .setDescription('🚫 สั่งปิดห้อง Private AI Chat ทั้งหมดในเซิร์ฟเวอร์ทันทีเมี๊ยว (Admin Only)')),
+                .setDescription('🚫 สั่งปิดห้อง Private AI Chat ทั้งหมดในเซิร์ฟเวอร์ทันทีเมี๊ยว (Admin Only)'))
+        .addSubcommand(sub =>
+            sub.setName('speak')
+                .setDescription('🎙️ สั่งให้ AI เจาะจงตัวละครมาตอบทันทีเมี๊ยว🐾')
+                .addStringOption(o => o.setName('persona').setDescription('เลือก AI ที่ต้องการให้ตอบเมี๊ยว🐾').setRequired(true).setAutocomplete(true))),
 
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
@@ -280,6 +284,110 @@ module.exports = {
 
             return interaction.editReply({ content: `✅ ปิดห้อง Private AI Chat ทั้งหมดเรียบร้อยเมี๊ยว! (ลบไปทั้งหมด **${deletedCount}** ห้อง🐾)` });
         }
+
+        // 11. Speak: Force AI to respond with Approve/Reject workflow
+        if (sub === 'speak') {
+            const botId = interaction.options.getString('persona');
+            const { data: char } = await supabase.from('ai_characters').select('*').eq('id', botId).single();
+
+            if (!char) return interaction.editReply({ content: '❌ หาตัวละคร AI ตัวนั้นไม่เจอเลยเมี๊ยว...' });
+
+            // ดึงประวัติแชทเพื่อสร้าง Context
+            const history = await interaction.channel.messages.fetch({ limit: 15 });
+            const historyData = Array.from(history.values()).reverse();
+
+            // นำเข้า Logic การสร้าง System Prompt และ Messages (เลียนแบบจาก messageCreate.js)
+            const { getChatAI } = require('../../utils/openRouter');
+            const { getGuildData } = require('../../utils/guildCache');
+            const { settings } = await getGuildData(guildId);
+
+            let usersContextXml = "<users_context>\n";
+            const activeUserIds = new Set();
+            historyData.forEach(m => { if (!m.author.bot) activeUserIds.add(m.author.id); });
+
+            const userNamesMap = new Map();
+            for (const uId of activeUserIds) {
+                const uObj = interaction.client.users.cache.get(uId);
+                userNamesMap.set(uId, uObj ? uObj.username : uId);
+            }
+
+            // (ย่อ Logic การดึง Intro เพื่อความกระชับ แต่รักษาโครงสร้าง XML ไว้)
+            usersContextXml += "</users_context>";
+
+            let finalPersona = char.persona ? char.persona.replace(/{{char}}/gi, char.name) : "";
+            finalPersona = finalPersona.replace(/{{user}}/gi, interaction.user.username);
+
+            const systemPrompt = `<instructions>
+You are playing as ${char.name}.
+[CORE RULES]
+- **IMMERSIVE PORTRAYAL:** มั่นคงในคาแรคเตอร์และอารมณ์ของตัวละครเสมอ
+- **XML OUTPUT ONLY:** ตอบกลับภายใต้โครงสร้าง XML ที่กำหนดให้เท่านั้น
+- **NO HEADERS:** ห้ามใส่ [HH:mm] หรือ ชื่อตัวละคร : ลงในบทสนทนา
+
+[OUTPUT STRUCTURE]
+<turn_responses>
+  <persona name="${char.name}">
+    <thought>...วิเคราะห์สถานการณ์...</thought>
+    <dialogue>...บทสนทนาคำพูดล้วนๆ...</dialogue>
+  </persona>
+</turn_responses>
+</instructions>
+
+<characters>
+  <persona name="${char.name}">${finalPersona}</persona>
+</characters>
+
+${usersContextXml}`;
+
+            const messagesForAI = [{ role: 'system', content: systemPrompt }];
+            historyData.forEach(m => {
+                const name = userNamesMap.get(m.author.id) || m.author.username;
+                const typeAttr = m.author.bot ? ' type="persona"' : '';
+                messagesForAI.push({
+                    role: m.author.bot ? 'assistant' : 'user',
+                    content: `<msg from="${name}"${typeAttr}>${m.content.replace(/[<>]/g, '')}</msg>`
+                });
+            });
+
+            // เรียก AI
+            const aiResponse = await getChatAI(messagesForAI);
+            
+            // Parse XML
+            const dialogueRegex = /<dialogue>([\s\S]*?)<\/dialogue>/i;
+            const dialogueMatch = aiResponse.match(dialogueRegex);
+            let finalMsg = dialogueMatch ? dialogueMatch[1].trim() : aiResponse.replace(/<[^>]+>/g, '').trim();
+
+            if (!finalMsg) return interaction.editReply({ content: '❌ AI ไม่ตอบอะไรกลับมาเลยเมี๊ยว...' });
+
+            // เก็บข้อความไว้ใน Cache เพื่อรอการอนุมัติ
+            if (!interaction.client.aiSpeakCache) interaction.client.aiSpeakCache = new Map();
+            interaction.client.aiSpeakCache.set(interaction.id, {
+                content: finalMsg,
+                charName: char.name,
+                charAvatar: char.image_url
+            });
+
+            const embed = new EmbedBuilder()
+                .setAuthor({ name: char.name, iconURL: char.image_url || null })
+                .setDescription(finalMsg)
+                .setColor(0x8B5CF6)
+                .setFooter({ text: 'คุณต้องการส่งข้อความนี้ไหมเมี๊ยว? (เห็นแค่คนเดียวนะเมี๊ยว🐾)' });
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`ai_speak_approve:${interaction.id}`)
+                    .setLabel('Approve')
+                    .setStyle(ButtonStyle.Success)
+                    .setEmoji('✅'),
+                new ButtonBuilder()
+                    .setCustomId(`ai_speak_reject:${interaction.id}`)
+                    .setLabel('Reject')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('❌')
+            );
+
+            return interaction.editReply({ embeds: [embed], components: [row] });
+        }
     },
 
     async autocomplete(interaction) {
@@ -289,7 +397,7 @@ module.exports = {
         const { data: chars } = await supabase
             .from('ai_characters')
             .select('id, name')
-            .eq('guild_id', guildId)
+            .or(`guild_id.eq.${guildId},is_public.eq.true`)
             .ilike('name', `%${focusedValue}%`)
             .limit(25);
 

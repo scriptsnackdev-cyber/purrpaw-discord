@@ -579,6 +579,41 @@ module.exports = {
                 return interaction.editReply({ content: `⏰ หมดเวลาการใช้งาน! ปิดห้องแชทส่วนตัวทั้งหมดแล้วเมี๊ยว (ลบไป ${count} ห้อง🐾)` });
             }
 
+            // --- AI Speak: Approve/Reject ---
+            else if (customId.startsWith('ai_speak_approve:')) {
+                const originalId = customId.split(':')[1];
+                const cached = interaction.client.aiSpeakCache?.get(originalId);
+
+                if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', ephemeral: true });
+
+                await interaction.deferUpdate();
+
+                // จัดการ Webhook เมี๊ยว🐾
+                if (!interaction.client.webhookCache) interaction.client.webhookCache = new Map();
+                let webhook = interaction.client.webhookCache.get(interaction.channelId);
+                if (!webhook) {
+                    const webhooks = await interaction.channel.fetchWebhooks();
+                    webhook = webhooks.find(wh => wh.name === 'PurrPaw-AI');
+                    if (!webhook) webhook = await interaction.channel.createWebhook({ name: 'PurrPaw-AI' });
+                    interaction.client.webhookCache.set(interaction.channelId, webhook);
+                }
+
+                await webhook.send({
+                    content: cached.content,
+                    username: cached.charName,
+                    avatarURL: cached.charAvatar || null
+                });
+
+                interaction.client.aiSpeakCache.delete(originalId);
+                return interaction.editReply({ content: '✅ ส่งข้อความเรียบร้อยแล้วเมี๊ยวว!🐾', embeds: [], components: [] });
+            }
+
+            else if (customId.startsWith('ai_speak_reject:')) {
+                const originalId = customId.split(':')[1];
+                interaction.client.aiSpeakCache?.delete(originalId);
+                return interaction.update({ content: '❌ ยกเลิกการส่งข้อความแล้วเมี๊ยว!🐾', embeds: [], components: [] });
+            }
+
             // --- ปุ่มลบฟอร์มปกติ (แอดมินเท่านั้น) ---
             else if (customId.startsWith('form_delete:')) {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
