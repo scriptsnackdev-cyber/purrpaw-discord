@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType, MessageFlags } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const { invalidateCache } = require('../../utils/guildCache');
 
@@ -69,7 +69,9 @@ module.exports = {
         const channelId = interaction.channel.id;
 
         // ⭐ Defer reply เพื่อป้องกัน Timeout เมี๊ยว🐾
-        await interaction.deferReply({ flags: 64 });
+        if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        }
 
         // 1. Create Persona
         if (sub === 'create') {

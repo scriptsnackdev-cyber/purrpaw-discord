@@ -1,4 +1,4 @@
-const { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, PermissionFlagsBits, ChannelType, MessageFlags } = require('discord.js');
 const { getGuildData } = require('../../utils/guildCache');
 const supabase = require('../../supabaseClient');
 const { handleRPGAction } = require('../../utils/rpgManager');
@@ -28,18 +28,26 @@ module.exports = {
         const lastUsed = interaction.client.interactionCooldowns.get(cooldownKey) || 0;
         const now = Date.now();
         if (now - lastUsed < 800) { // 0.8 วินาทีเมี๊ยว🐾
-            return interaction.reply({ content: '🐾 ใจเย็นๆ นะเมี๊ยววว อย่ารัวปุ่มสิ!', ephemeral: true }).catch(() => {});
+            return interaction.reply({ content: '🐾 ใจเย็นๆ นะเมี๊ยววว อย่ารัวปุ่มสิ!', flags: [MessageFlags.Ephemeral] }).catch(() => {});
         }
         interaction.client.interactionCooldowns.set(cooldownKey, now);
 
         try {
-            // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache ---
-            const { features, settings } = await getGuildData(interaction.guild.id);
+            // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache (เริ่มดึงไว้ก่อนเมี๊ยว🐾) ---
+            const guildDataPromise = getGuildData(interaction.guild.id);
 
             // 💾 1. จัดการกรณีเป็น Slash Command
             if (interaction.isChatInputCommand()) {
                 const command = interaction.client.commands.get(interaction.commandName);
                 if (!command) return;
+
+                // ⭐ สำหรับคำสั่งที่รู้ว่าต้องใช้เวลาหรือเป็น Ephemeral ให้ Defer ไว้ก่อนทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
+                if (interaction.commandName === 'aichat') {
+                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
+                }
+
+                // รอข้อมูล Feature/Settings
+                const { features, settings } = await guildDataPromise;
 
                 // ตรวจสอบการเปิดใช้งานฟีเจอร์ (ยกเว้นคำสั่งที่ใช้สำหรับเปิด/ปิดระบบเอง)
                 const subcommand = interaction.options.getSubcommand(false);
@@ -47,16 +55,16 @@ module.exports = {
                 
                 if (!isEnableDisable) {
                     if (interaction.commandName === 'music' && features.music === false) {
-                        return interaction.reply({ content: '❌ ฟีเจอร์เพลงถูกปิดการใช้งานอยู่เมี๊ยว!', ephemeral: true });
+                        return interaction.reply({ content: '❌ ฟีเจอร์เพลงถูกปิดการใช้งานอยู่เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                     }
                     if (interaction.commandName === 'autoroles' && features.auto_role === false) {
-                        return interaction.reply({ content: '❌ ระบบแจกยศอัตโนมัติถูกปิดอยู่เมี๊ยว!', ephemeral: true });
+                        return interaction.reply({ content: '❌ ระบบแจกยศอัตโนมัติถูกปิดอยู่เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                     }
                     if (interaction.commandName === 'rolebuttons' && features.role_button === false) {
-                        return interaction.reply({ content: '❌ ระบบปุ่มรับยศถูกปิดอยู่เมี๊ยว!', ephemeral: true });
+                        return interaction.reply({ content: '❌ ระบบปุ่มรับยศถูกปิดอยู่เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                     }
                     if (interaction.commandName === 'fortune' && features.fortune === false && subcommand === 'draw') {
-                        return interaction.reply({ content: '❌ ระบบดูดวงถูกปิดอยู่เมี๊ยว!', ephemeral: true });
+                        return interaction.reply({ content: '❌ ระบบดูดวงถูกปิดอยู่เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                     }
                 }
                 
@@ -98,15 +106,15 @@ module.exports = {
                 const { data: session } = await supabase.from('rpg_sessions').select('*').eq('id', sessionId).single();
                 
                 if (!session || session.status !== 'lobby') {
-                    return interaction.reply({ content: '❌ ห้องนี้เริ่มไปแล้วหรือปิดรับสมัครแล้วนะเมี๊ยว!', ephemeral: true });
+                    return interaction.reply({ content: '❌ ห้องนี้เริ่มไปแล้วหรือปิดรับสมัครแล้วนะเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 }
 
                 const players = session.players || [];
                 if (players.length >= 8) {
-                    return interaction.reply({ content: '❌ ปาร์ตี้นี้เต็มแล้วนะเมี๊ยว! (รับได้สูงสุด 8 ท่าน)', ephemeral: true });
+                    return interaction.reply({ content: '❌ ปาร์ตี้นี้เต็มแล้วนะเมี๊ยว! (รับได้สูงสุด 8 ท่าน)', flags: [MessageFlags.Ephemeral] });
                 }
                 if (players.find(p => p.id === user.id)) {
-                    return interaction.reply({ content: '❌ คุณอยู่ในปาร์ตี้อยู่แล้วนะเมี๊ยว!', ephemeral: true });
+                    return interaction.reply({ content: '❌ คุณอยู่ในปาร์ตี้อยู่แล้วนะเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 }
 
                 players.push({ id: user.id, name: user.displayName || user.username, class: 'Adventurer' });
@@ -141,32 +149,32 @@ module.exports = {
 
             // --- ปุ่มรับยศปกติ (Toggle) ---
             else if (customId.startsWith('assign_role:')) {
-                if (features.role_button === false) return interaction.reply({ content: '❌ ระบบปิดใช้งานอยู่เมี๊ยว', ephemeral: true });
+                if (features.role_button === false) return interaction.reply({ content: '❌ ระบบปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
                 const roleId = customId.split(':')[1];
                 const role = guild.roles.cache.get(roleId);
                 
-                if (!role) return interaction.reply({ content: 'หา Role ไม่เจอเมี๊ยว! (ยศอาจจะถูกลบไปแล้ว🐾)', ephemeral: true });
+                if (!role) return interaction.reply({ content: 'หา Role ไม่เจอเมี๊ยว! (ยศอาจจะถูกลบไปแล้ว🐾)', flags: [MessageFlags.Ephemeral] });
 
                 try {
                     // เช็คสิทธิ์บอทเบื้องต้นเมี๊ยว
                     if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-                        return interaction.reply({ content: '❌ บอทไม่มีสิทธิ์ `Manage Roles` ในเซิร์ฟเวอร์นี้เมี๊ยว! กรุณาตรวจสอบการตั้งค่าของบอทนะ🐾', ephemeral: true });
+                        return interaction.reply({ content: '❌ บอทไม่มีสิทธิ์ `Manage Roles` ในเซิร์ฟเวอร์นี้เมี๊ยว! กรุณาตรวจสอบการตั้งค่าของบอทนะ🐾', flags: [MessageFlags.Ephemeral] });
                     }
 
                     if (role.position >= guild.members.me.roles.highest.position) {
-                        return interaction.reply({ content: `❌ ยศ **${role.name}** อยู่สูงกว่าหรือเท่ากับยศของบอทเมี๊ยว! บอทเลยจัดการไม่ได้ (ต้องย้ายยศบอทให้สูงขึ้นใน Server Settings นะ🐾)`, ephemeral: true });
+                        return interaction.reply({ content: `❌ ยศ **${role.name}** อยู่สูงกว่าหรือเท่ากับยศของบอทเมี๊ยว! บอทเลยจัดการไม่ได้ (ต้องย้ายยศบอทให้สูงขึ้นใน Server Settings นะ🐾)`, flags: [MessageFlags.Ephemeral] });
                     }
 
                     if (member.roles.cache.has(role.id)) {
                         await member.roles.remove(role);
-                        return interaction.reply({ content: `ดึงยศ **${role.name}** ออกให้แล้วนะเมี๊ยว🐾`, ephemeral: true });
+                        return interaction.reply({ content: `ดึงยศ **${role.name}** ออกให้แล้วนะเมี๊ยว🐾`, flags: [MessageFlags.Ephemeral] });
                     } else {
                         await member.roles.add(role);
-                        return interaction.reply({ content: `เพิ่มยศ **${role.name}** ให้แล้วนะเมี๊ยวว!🐾`, ephemeral: true });
+                        return interaction.reply({ content: `เพิ่มยศ **${role.name}** ให้แล้วนะเมี๊ยวว!🐾`, flags: [MessageFlags.Ephemeral] });
                     }
                 } catch (e) { 
                     console.error('Role Assign Error:', e);
-                    return interaction.reply({ content: `งื้อออ บอทจัดการยศไม่ได้เมี๊ยว: \`${e.message}\` 🐾`, ephemeral: true }); 
+                    return interaction.reply({ content: `งื้อออ บอทจัดการยศไม่ได้เมี๊ยว: \`${e.message}\` 🐾`, flags: [MessageFlags.Ephemeral] }); 
                 }
             } 
 
@@ -181,30 +189,30 @@ module.exports = {
                     if (removeRole && member.roles.cache.has(removeRole.id)) {
                         await member.roles.remove(removeRole);
                     }
-                    return interaction.reply({ content: `✨ **ยืนยันตัวตนสำเร็จ!** ยินดีต้อนรับเข้าบ้านอย่างเป็นทางการนะเมี๊ยววว! 🐾`, ephemeral: true });
+                    return interaction.reply({ content: `✨ **ยืนยันตัวตนสำเร็จ!** ยินดีต้อนรับเข้าบ้านอย่างเป็นทางการนะเมี๊ยววว! 🐾`, flags: [MessageFlags.Ephemeral] });
                 } catch (e) {
                     console.error('Verify button error:', e);
-                    return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการจัดการยศเมี๊ยว (บอทอาจมียศต่ำกว่ายศนั้น)', ephemeral: true });
+                    return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการจัดการยศเมี๊ยว (บอทอาจมียศต่ำกว่ายศนั้น)', flags: [MessageFlags.Ephemeral] });
                 }
             }
             
             // --- ปุ่มดูดวง ---
             else if (customId === 'fortune_draw') {
-                if (features.fortune === false) return interaction.reply({ content: '❌ ระบบปิดใช้งานอยู่เมี๊ยว', ephemeral: true });
+                if (features.fortune === false) return interaction.reply({ content: '❌ ระบบปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
                 const { drawCard } = require('../../commands/fortune/fortune');
                 await drawCard(interaction);
             }
 
             // --- ปุ่ม MBTI ---
             else if (customId === 'mbti_start') {
-                if (features.mbti === false) return interaction.reply({ content: '❌ ระบบ MBTI ถูกปิดใช้งานอยู่เมี๊ยว', ephemeral: true });
+                if (features.mbti === false) return interaction.reply({ content: '❌ ระบบ MBTI ถูกปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
                 const { startTest } = require('../../commands/mbti/mbti');
                 await startTest(interaction);
             }
 
             // --- ปุ่ม SBTI ---
             else if (customId === 'sbti_start') {
-                if (features.sbti === false) return interaction.reply({ content: '❌ ระบบ SBTI ถูกปิดใช้งานอยู่เมี๊ยว', ephemeral: true });
+                if (features.sbti === false) return interaction.reply({ content: '❌ ระบบ SBTI ถูกปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
                 const { startTest } = require('../../commands/mbti/sbti');
                 await startTest(interaction);
             }
@@ -214,7 +222,7 @@ module.exports = {
                 try {
                     const formId = customId.split(':')[1];
                     const { data: form } = await supabase.from('forms').select('*').eq('id', formId).single();
-                    if (!form) return interaction.reply({ content: '❌ ไม่พบข้อมูลฟอร์มเมี๊ยว', ephemeral: true });
+                    if (!form) return interaction.reply({ content: '❌ ไม่พบข้อมูลฟอร์มเมี๊ยว', flags: [MessageFlags.Ephemeral] });
 
                     const modal = new ModalBuilder().setCustomId(`form_submit:${formId}`).setTitle(form.modal_title || 'แบบฟอร์มเมี๊ยว');
                     const questions = form.modal_questions || [];
@@ -229,7 +237,7 @@ module.exports = {
             // --- ปุ่มอนุมัติฟอร์ม (แอดมิน) ---
             else if (customId.startsWith('form_approve:')) {
                 const [_, formId, targetUserId] = customId.split(':');
-                if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', ephemeral: true });
+                if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 const { data: form } = await supabase.from('forms').select('*').eq('id', formId).single();
                 const targetMember = await guild.members.fetch(targetUserId).catch(() => null);
                 if (targetMember) {
@@ -243,14 +251,14 @@ module.exports = {
 
             // --- ปุ่มปฏิเสธฟอร์ม (แอดมิน) ---
             else if (customId.startsWith('form_reject:')) {
-                if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', ephemeral: true });
+                if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0xEF4444).addFields({ name: 'สถานะ', value: `❌ ปฏิเสธโดย ${user.tag}` });
                 await interaction.update({ embeds: [newEmbed], components: [] });
             }
 
             // --- ปุ่มเปิดห้องแชท AI ส่วนตัว ---
             else if (customId.startsWith('ai_private_chat:')) {
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
                 const formId = customId.split(':')[1];
 
                 try {
@@ -330,7 +338,7 @@ module.exports = {
 
             // --- ปุ่มเปิดห้องส่วนตัว (Private Room) ---
             else if (customId.startsWith('private_room_open:')) {
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
                 const formId = customId.split(':')[1];
 
                 try {
@@ -418,20 +426,20 @@ module.exports = {
             // --- ปุ่มลบฟอร์มห้องส่วนตัว ---
             else if (customId.startsWith('private_room_form_delete:')) {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบปุ่มนี้ได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบปุ่มนี้ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
                 const formId = customId.split(':')[1];
                 await supabase.from('private_room_forms').delete().eq('id', formId);
                 await interaction.message.delete().catch(() => {});
-                return interaction.reply({ content: '🗑️ ลบฟอร์มห้องส่วนตัวออกจากระบบเรียบร้อยแล้วเมี๊ยว!', ephemeral: true });
+                return interaction.reply({ content: '🗑️ ลบฟอร์มห้องส่วนตัวออกจากระบบเรียบร้อยแล้วเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
             }
 
             // --- ปุ่ม Invite / Kick ในห้องส่วนตัว ---
             else if (customId === 'private_room_invite' || customId === 'private_room_kick') {
                 const { data: room } = await supabase.from('private_rooms').select('*').eq('channel_id', interaction.channelId).eq('is_deleted', false).single();
-                if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องส่วนตัวนี้เมี๊ยว!', ephemeral: true });
+                if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องส่วนตัวนี้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 if (room.owner_id !== user.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องเท่านั้นที่ใช้ปุ่มนี้ได้เมี๊ยว!', ephemeral: true });
+                    return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องเท่านั้นที่ใช้ปุ่มนี้ได้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 }
 
                 const isInvite = customId === 'private_room_invite';
@@ -444,13 +452,13 @@ module.exports = {
                     .setMaxValues(5);
 
                 const selectRow = new ActionRowBuilder().addComponents(select);
-                return interaction.reply({ content: isInvite ? '➕ เลือกเพื่อนที่ต้องการเพิ่มเข้าห้องเมี๊ยว:' : '➖ เลือกเพื่อนที่ต้องการนำออกจากห้องเมี๊ยว:', components: [selectRow], ephemeral: true });
+                return interaction.reply({ content: isInvite ? '➕ เลือกเพื่อนที่ต้องการเพิ่มเข้าห้องเมี๊ยว:' : '➖ เลือกเพื่อนที่ต้องการนำออกจากห้องเมี๊ยว:', components: [selectRow], flags: [MessageFlags.Ephemeral] });
             }
 
             // --- ปุ่มลบฟอร์ม AI ส่วนตัว (แอดมินเท่านั้น) ---
             else if (customId.startsWith('ai_private_chat_delete:')) {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบปุ่มนี้ได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบปุ่มนี้ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
                 const formId = customId.split(':')[1];
                 
@@ -460,15 +468,15 @@ module.exports = {
 
                 await supabase.from('ai_chat_forms').delete().eq('id', formId);
                 await interaction.message.delete().catch(() => {});
-                return interaction.reply({ content: '🗑️ เคลียร์ห้องแชทและลบฟอร์มออกจากระบบเรียบร้อยแล้วเมี๊ยว!', ephemeral: true });
+                return interaction.reply({ content: '🗑️ เคลียร์ห้องแชทและลบฟอร์มออกจากระบบเรียบร้อยแล้วเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
             }
 
             // --- ปุ่มเปลี่ยนชื่อห้องส่วนตัว (Owner/Admin) ---
             else if (customId === 'private_room_rename') {
                 const { data: room } = await supabase.from('private_rooms').select('*').eq('channel_id', interaction.channelId).eq('is_deleted', false).single();
-                if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องนี้เมี๊ยว!', ephemeral: true });
+                if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องนี้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 if (room.owner_id !== user.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องหรือแอดมินเท่านั้นที่เปลี่ยนชื่อห้องได้เมี๊ยว!', ephemeral: true });
+                    return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องหรือแอดมินเท่านั้นที่เปลี่ยนชื่อห้องได้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 }
 
                 const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -488,9 +496,9 @@ module.exports = {
             // --- ปุ่มปิดห้องส่วนตัวทันที (เจ้าของห้อง/Admin) ---
             else if (customId === 'private_room_close') {
                 const { data: room } = await supabase.from('private_rooms').select('*').eq('channel_id', interaction.channelId).eq('is_deleted', false).single();
-                if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องนี้เมี๊ยว!', ephemeral: true });
+                if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องนี้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 if (room.owner_id !== user.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องหรือแอดมินเท่านั้นที่ปิดห้องได้เมี๊ยว!', ephemeral: true });
+                    return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องหรือแอดมินเท่านั้นที่ปิดห้องได้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 }
 
                 await interaction.reply({ content: '🏠 กำลังปิดห้องและลบข้อมูล... ขอบคุณที่ใช้บริการนะเมี๊ยวว!🐾🌸' });
@@ -510,10 +518,10 @@ module.exports = {
             // --- ปุ่มปิดห้องส่วนตัวทั้งหมด (Admin Only) ---
             else if (customId === 'private_room_close_all') {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่สั่งปิดห้องทั้งหมดได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่สั่งปิดห้องทั้งหมดได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
 
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
                 const { data: rooms } = await supabase.from('private_rooms').select('*').eq('guild_id', guild.id).eq('is_deleted', false);
                 
                 if (!rooms || rooms.length === 0) {
@@ -572,9 +580,9 @@ module.exports = {
             // --- ปุ่มสั่งปิดห้อง AI ทั้งหมด (Admin Only) ---
             else if (customId === 'ai_private_chat_close_all') {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่สั่งปิดห้องทั้งหมดได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่สั่งปิดห้องทั้งหมดได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
                 const { closeAllSessions } = require('../../utils/aiCleanup');
                 const count = await closeAllSessions(guild);
                 return interaction.editReply({ content: `⏰ หมดเวลาการใช้งาน! ปิดห้องแชทส่วนตัวทั้งหมดแล้วเมี๊ยว (ลบไป ${count} ห้อง🐾)` });
@@ -585,7 +593,7 @@ module.exports = {
                 const originalId = customId.split(':')[1];
                 const cached = interaction.client.aiSpeakCache?.get(originalId);
 
-                if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', ephemeral: true });
+                if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
 
                 await interaction.deferUpdate();
 
@@ -618,12 +626,12 @@ module.exports = {
             // --- ปุ่มลบฟอร์มปกติ (แอดมินเท่านั้น) ---
             else if (customId.startsWith('form_delete:')) {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบฟอร์มนี้ได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบฟอร์มนี้ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
                 const formId = customId.split(':')[1];
                 await supabase.from('forms').delete().eq('id', formId);
                 await interaction.message.delete().catch(() => {});
-                return interaction.reply({ content: '🗑️ ลบแบบฟอร์มออกจากระบบเรียบร้อยแล้วเมี๊ยว!', ephemeral: true });
+                return interaction.reply({ content: '🗑️ ลบแบบฟอร์มออกจากระบบเรียบร้อยแล้วเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
             }
 
             // --- [Ticket] ปุ่มเปิดหน้าต่างแจ้งเรื่อง ---
@@ -666,10 +674,10 @@ module.exports = {
             else if (customId.startsWith('ticket_status:')) {
                 const [_, ticketId, newStatus] = customId.split(':');
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่จัดการ Ticket ได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่จัดการ Ticket ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
 
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
                 const { data: ticket, error } = await supabase
                     .from('tickets')
@@ -734,10 +742,10 @@ module.exports = {
             else if (customId.startsWith('ticket_delete:')) {
                 const ticketId = customId.split(':')[1];
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบ Ticket ได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบ Ticket ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
 
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
                 await supabase.from('tickets').delete().eq('id', ticketId);
                 await interaction.message.delete().catch(() => {});
                 return interaction.editReply({ content: '🗑️ ลบ Ticket ออกจากระบบเรียบร้อยแล้วเมี๊ยว!' });
@@ -746,7 +754,7 @@ module.exports = {
             // --- [Ticket] ปุ่มยืนยันล้างทั้งหมด ---
             else if (customId === 'ticket_clean_confirm') {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่สั่งล้างข้อมูลได้นะเมี๊ยว!🐾', ephemeral: true });
+                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่สั่งล้างข้อมูลได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
 
                 await interaction.deferUpdate();
@@ -786,7 +794,7 @@ module.exports = {
             else if (customId === 'music_queue_btn') {
                 const queue = interaction.client.distube.getQueue(interaction.guildId);
                 if (!queue || queue.songs.length <= 1) {
-                    return interaction.reply({ content: '📭 ไม่มีเพลงต่อแถวอยู่ในคิวเลยเมี๊ยว!', ephemeral: true });
+                    return interaction.reply({ content: '📭 ไม่มีเพลงต่อแถวอยู่ในคิวเลยเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                 }
 
                 const upcoming = queue.songs.slice(1, 6);
@@ -851,14 +859,14 @@ module.exports = {
                         const voice = interaction.client.distube.voices.get(interaction.guildId);
                         if (voice) {
                             await voice.leave();
-                            return await interaction.reply({ content: '⏹️ แยกย้ายกันกลับบ้านนะเมี๊ยวว!🐾🌸', ephemeral: true });
+                            return await interaction.reply({ content: '⏹️ แยกย้ายกันกลับบ้านนะเมี๊ยวว!🐾🌸', flags: [MessageFlags.Ephemeral] });
                         } else {
-                            return await interaction.reply({ content: '❌ บอทไม่ได้อยู่ในห้องพูดคุยตอนนี้นะเมี๊ยว!', ephemeral: true });
+                            return await interaction.reply({ content: '❌ บอทไม่ได้อยู่ในห้องพูดคุยตอนนี้นะเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                         }
                     }
 
                     // --- คำสั่งอื่นๆ: ต้องมีคิวเพลงเมี๊ยว ---
-                    if (!queue) return interaction.reply({ content: '❌ ไม่มีเพลงที่กำลังเล่นอยู่เมี๊ยว!', ephemeral: true });
+                    if (!queue) return interaction.reply({ content: '❌ ไม่มีเพลงที่กำลังเล่นอยู่เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
 
                     switch (action) {
                         case 'pause':
@@ -902,15 +910,15 @@ module.exports = {
                         case 'skip':
                             try {
                                 await queue.skip();
-                                await interaction.reply({ content: '⏭️ ข้ามเพลงให้แล้วเมี๊ยว!', ephemeral: true });
+                                await interaction.reply({ content: '⏭️ ข้ามเพลงให้แล้วเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                             } catch {
-                                await interaction.reply({ content: '❌ ไม่มีเพลงถัดไปในคิวเมี๊ยว!', ephemeral: true });
+                                await interaction.reply({ content: '❌ ไม่มีเพลงถัดไปในคิวเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                             }
                             break;
                         case 'loop':
                             const mode = queue.repeatMode === 1 ? 0 : 1;
                             queue.setRepeatMode(mode);
-                            await interaction.reply({ content: `🔁 วนซ้ำเพลงนี้: **${mode === 1 ? 'เปิด' : 'ปิด'}** ให้แล้วนะเมี๊ยว!`, ephemeral: true });
+                            await interaction.reply({ content: `🔁 วนซ้ำเพลงนี้: **${mode === 1 ? 'เปิด' : 'ปิด'}** ให้แล้วนะเมี๊ยว!`, flags: [MessageFlags.Ephemeral] });
                             break;
                         case 'mute':
                             const muteVol = queue.volume === 0 ? 50 : 0;
@@ -936,7 +944,7 @@ module.exports = {
                     }
                 } catch (e) {
                     console.error('Music Button Error:', e);
-                    if (!interaction.replied) await interaction.reply({ content: 'เกิดข้อผิดพลาดในการควบคุมเพลงเมี๊ยว...', ephemeral: true });
+                    if (!interaction.replied) await interaction.reply({ content: 'เกิดข้อผิดพลาดในการควบคุมเพลงเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
                 }
             }
         }
@@ -988,11 +996,11 @@ module.exports = {
                 const pickNum = parseInt(pickStr);
                 const queue = interaction.client.distube.getQueue(guild.id);
                 if (!queue || queue.songs.length <= 1) {
-                    return interaction.reply({ content: '❌ คิวเพลงหมดแล้วเมี๊ยว! ไม่มีเพลงให้ย้ายเป็นคิวแรกเรยเมี๊ยว', ephemeral: true });
+                    return interaction.reply({ content: '❌ คิวเพลงหมดแล้วเมี๊ยว! ไม่มีเพลงให้ย้ายเป็นคิวแรกเรยเมี๊ยว', flags: [MessageFlags.Ephemeral] });
                 }
 
                 if (isNaN(pickNum) || pickNum < 1 || pickNum > 5) {
-                    return interaction.reply({ content: `❌ ใส่ตัวเลข 1-5 เท่านั้นนะเมี๊ยว🐾`, ephemeral: true });
+                    return interaction.reply({ content: `❌ ใส่ตัวเลข 1-5 เท่านั้นนะเมี๊ยว🐾`, flags: [MessageFlags.Ephemeral] });
                 }
 
                 // ⭐ ใช้ Snapshot ค้นหาเพลงที่ถูกต้องในคิวปัจจุบันเมี๊ยว🐾
@@ -1001,18 +1009,18 @@ module.exports = {
 
                 // ถ้า Snapshot เก่นกว่า 30 วินาที ให้เตือนเมี๊ยว🐾
                 if (!snapshot || Date.now() - snapshot.timestamp > 30000) {
-                    return interaction.reply({ content: '❌ คิวอาจเปลี่ยนไปแล้วเมี๊ยว! กรุณาเปิดคิวใหม่อีกครั้งนะ🐾', ephemeral: true });
+                    return interaction.reply({ content: '❌ คิวอาจเปลี่ยนไปแล้วเมี๊ยว! กรุณาเปิดคิวใหม่อีกครั้งนะ🐾', flags: [MessageFlags.Ephemeral] });
                 }
 
                 const targetSong = snapshot.songs[pickNum - 1];
                 if (!targetSong) {
-                    return interaction.reply({ content: `❌ ไม่พบเพลงอันดับ ${pickNum} ในคิวเมี๊ยว!`, ephemeral: true });
+                    return interaction.reply({ content: `❌ ไม่พบเพลงอันดับ ${pickNum} ในคิวเมี๊ยว!`, flags: [MessageFlags.Ephemeral] });
                 }
 
                 // ค้นหาเพลงจากชื่อจริงในคิวปัจจุบัน (ไม่เชื่อตัวเลขตาบอด)
                 const realIdx = queue.songs.findIndex((s, i) => i > 0 && s.url === targetSong.url);
                 if (realIdx === -1) {
-                    return interaction.reply({ content: '❌ เพลงนี้หลุดออกจากคิวไปแล้วเมี๊ยว (เพลงอาจถูกข้ามหรือเปลี่ยนไประหว่างรอ)🐾', ephemeral: true });
+                    return interaction.reply({ content: '❌ เพลงนี้หลุดออกจากคิวไปแล้วเมี๊ยว (เพลงอาจถูกข้ามหรือเปลี่ยนไประหว่างรอ)🐾', flags: [MessageFlags.Ephemeral] });
                 }
 
                 const [picked] = queue.songs.splice(realIdx, 1);
@@ -1021,23 +1029,23 @@ module.exports = {
                 // ลบ Snapshot หลังใช้งานเมี๊ยว🐾
                 interaction.client._queueSnapshots.delete(snapshotKey);
 
-                return interaction.reply({ content: `✅ ย้าย **${picked.name}** มาเป็นคิวถัดไปแล้วเมี๊ยวว!🐾🌸`, ephemeral: true });
+                return interaction.reply({ content: `✅ ย้าย **${picked.name}** มาเป็นคิวถัดไปแล้วเมี๊ยวว!🐾🌸`, flags: [MessageFlags.Ephemeral] });
             }
 
             // --- เพิ่มเพลงผ่าน Popup ---
             if (customId === 'music_add_submit') {
                 const query = fields.getTextInputValue('music_query_input');
                 const memberVoice = guild.members.cache.get(user.id)?.voice?.channel;
-                if (!memberVoice) return interaction.reply({ content: '❌ คุณต้องเข้าห้องพูดคุย (Voice) ก่อนนะเมี๊ยว!', ephemeral: true });
+                if (!memberVoice) return interaction.reply({ content: '❌ คุณต้องเข้าห้องพูดคุย (Voice) ก่อนนะเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
 
-                await interaction.deferUpdate().catch(() => interaction.deferReply({ ephemeral: true }).catch(() => {}));
+                await interaction.deferUpdate().catch(() => interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {}));
                 try {
                     await interaction.client.distube.play(memberVoice, query, {
                         textChannel: interaction.channel,
                         member: guild.members.cache.get(user.id),
                     });
                 } catch (err) {
-                    await interaction.followUp({ content: `❌ เพิ่มเพลงไม่ได้เมี๊ยว: \`${err.message}\``, ephemeral: true });
+                    await interaction.followUp({ content: `❌ เพิ่มเพลงไม่ได้เมี๊ยว: \`${err.message}\``, flags: [MessageFlags.Ephemeral] });
                 }
                 return;
             }
@@ -1047,7 +1055,7 @@ module.exports = {
                 const msg = fields.getTextInputValue('welcome_message_input');
                 settings.welcome = { ...settings.welcome, message: msg };
                 await supabase.from('guilds').update({ settings }).eq('id', guild.id);
-                return interaction.reply({ content: '✅ อัปเดตข้อความต้อนรับเรียบร้อยเมี๊ยว!', ephemeral: true });
+                return interaction.reply({ content: '✅ อัปเดตข้อความต้อนรับเรียบร้อยเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
             }
 
             // --- ตั้งค่า Goodbye ---
@@ -1055,12 +1063,12 @@ module.exports = {
                 const msg = fields.getTextInputValue('goodbye_message_input');
                 settings.goodbye = { ...settings.goodbye, message: msg };
                 await supabase.from('guilds').update({ settings }).eq('id', guild.id);
-                return interaction.reply({ content: '✅ อัปเดตข้อความบอกลาเรียบร้อยเมี๊ยว!', ephemeral: true });
+                return interaction.reply({ content: '✅ อัปเดตข้อความบอกลาเรียบร้อยเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
             }
 
             // --- ส่งฟอร์มสมัคร ---
             else if (customId.startsWith('form_submit:')) {
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
                 const formId = customId.split(':')[1];
                 
                 try {
@@ -1111,7 +1119,7 @@ module.exports = {
                 const ticketMessage = fields.getTextInputValue('ticket_message_input');
                 const ticketImage = fields.getTextInputValue('ticket_image_input');
 
-                await interaction.deferReply({ ephemeral: true });
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
                 try {
                     // 1. บันทึกลง Database
@@ -1179,10 +1187,10 @@ module.exports = {
 
                 try {
                     await interaction.channel.setName(finalName);
-                    return interaction.reply({ content: `✅ เปลี่ยนชื่อห้องเป็น **${finalName}** เรียบร้อยแล้วเมี๊ยวว!🐾🌸`, ephemeral: true });
+                    return interaction.reply({ content: `✅ เปลี่ยนชื่อห้องเป็น **${finalName}** เรียบร้อยแล้วเมี๊ยวว!🐾🌸`, flags: [MessageFlags.Ephemeral] });
                 } catch (err) {
                     console.error('Error renaming channel via modal:', err);
-                    return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการเปลี่ยนชื่อห้องเมี๊ยว! (อาจจะติด Cooldown ของ Discord นะ🐾)', ephemeral: true });
+                    return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการเปลี่ยนชื่อห้องเมี๊ยว! (อาจจะติด Cooldown ของ Discord นะ🐾)', flags: [MessageFlags.Ephemeral] });
                 }
             }
         }
@@ -1193,9 +1201,9 @@ module.exports = {
             try {
                 if (interaction.isAutocomplete()) return;
                 if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ content: errorMessage, ephemeral: true });
+                    await interaction.reply({ content: errorMessage, flags: [MessageFlags.Ephemeral] });
                 } else {
-                    await interaction.followUp({ content: errorMessage, ephemeral: true });
+                    await interaction.followUp({ content: errorMessage, flags: [MessageFlags.Ephemeral] });
                 }
             } catch (e) {
                 // ถ้าส่งข้อความไม่ได้เลย ก็ปล่อยไปเมี๊ยว🐾
