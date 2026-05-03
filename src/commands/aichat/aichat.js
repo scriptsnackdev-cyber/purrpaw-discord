@@ -368,9 +368,12 @@ You are playing as ${char.name}.
 <turn_responses>
   <persona name="${char.name}">
     <thought>...วิเคราะห์สถานการณ์...</thought>
-    <dialogue>...บทสนทนาคำพูดล้วนๆ...</dialogue>
+    <dialogue>...บทสนทนาคำพูดล้วนๆ (จำกัด 50-100 ตัวอักษร)...</dialogue>
   </persona>
 </turn_responses>
+
+[MULTI-CHARACTER RULES]
+- ตัวละครควรพูดสั้นๆ (50-100 ตัวอักษร) เพื่อความสมจริงเมี๊ยว🐾
 </instructions>
 
 <characters>
