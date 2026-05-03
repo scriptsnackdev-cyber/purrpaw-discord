@@ -397,8 +397,8 @@ ${usersContextXml}`;
             
             // Parse XML
             const dialogueRegex = /<dialogue>([\s\S]*?)<\/dialogue>/i;
-            const dialogueMatch = aiResponse.match(dialogueRegex);
-            let finalMsg = dialogueMatch ? dialogueMatch[1].trim() : aiResponse.replace(/<[^>]+>/g, '').trim();
+            const dialogueMatch = aiResponse && typeof aiResponse === 'string' ? aiResponse.match(dialogueRegex) : null;
+            let finalMsg = dialogueMatch ? dialogueMatch[1].trim() : (typeof aiResponse === 'string' ? aiResponse.replace(/<[^>]+>/g, '').trim() : '');
 
             if (!finalMsg) return interaction.editReply({ content: '❌ AI ไม่ตอบอะไรกลับมาเลยเมี๊ยว...' });
 
@@ -444,10 +444,15 @@ ${usersContextXml}`;
             .ilike('name', `%${focusedValue}%`)
             .limit(25);
 
-        if (!chars) return interaction.respond([]);
+        if (!chars) return;
 
-        await interaction.respond(
-            chars.map(c => ({ name: c.name, value: c.id }))
-        );
+        try {
+            await interaction.respond(
+                chars.map(c => ({ name: c.name, value: c.id }))
+            );
+        } catch (err) {
+            if (err.code === 10062) return; // Silent on Unknown Interaction
+            console.error('Autocomplete Error in aichat:', err);
+        }
     }
 };

@@ -17,6 +17,7 @@ module.exports = {
             try {
                 return await command.autocomplete(interaction);
             } catch (error) {
+                if (error.code === 10062) return; // Silent on Unknown Interaction (3s timeout)
                 return console.error('Autocomplete Error:', error);
             }
         }

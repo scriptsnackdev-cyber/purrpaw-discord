@@ -360,7 +360,7 @@ ${roomStatusXml}`;
                             });
                         }
                         const urlRegex = /(https?:\/\/\S+\.(?:png|jpe?g|webp|gif))/gi;
-                        const foundUrls = m.content.match(urlRegex) || [];
+                        const foundUrls = (m.content || '').match(urlRegex) || [];
                         foundUrls.forEach(url => {
                             contentArray.push({ type: 'image_url', image_url: { url: url } });
                         });
@@ -392,6 +392,8 @@ ${roomStatusXml}`;
                 let aiResponse = await getChatAI(messagesForAI, signal);
                 
                 // 9. แยกแยะและประมวลผล XML Responses (Design v2)
+                if (!aiResponse || typeof aiResponse !== 'string') return;
+
                 const personaRegex = /<persona\s+name=["']([^"']+)["'](?:\s+action=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/persona>/gi;
                 const thoughtRegex = /<thought>([\s\S]*?)<\/thought>/i;
                 const dialogueRegex = /<dialogue>([\s\S]*?)<\/dialogue>/i;
