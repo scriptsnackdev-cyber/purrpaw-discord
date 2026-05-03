@@ -306,12 +306,52 @@ module.exports = {
             historyData.forEach(m => { if (!m.author.bot) activeUserIds.add(m.author.id); });
 
             const userNamesMap = new Map();
+            const userIntrosMap = new Map();
+            const foundIntroUserIds = new Set();
+
+            const introChId = settings.ai_chat?.intro_channel_id;
+            const backupIntroChId = settings.ai_chat?.intro_backup_channel_id;
+
             for (const uId of activeUserIds) {
                 const uObj = interaction.client.users.cache.get(uId);
-                userNamesMap.set(uId, uObj ? uObj.username : uId);
+                const uname = uObj ? uObj.username : uId;
+                
+                if (uname === 'superdupermeow_') {
+                    const smIntro = `⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹\nชื่อ: คุณแม่เหมียว\nเพศ: หญิง\nบทบาท: คุณแม่เหมียวในห้อง ห้ามเถียง ห้ามด่า ต้องฟังแม่ ห้ามมารักหรือชอบแม่ ไปชอบลูกแมวเหมียว\n⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹`;
+                    userIntrosMap.set(uId, smIntro);
+                    userNamesMap.set(uId, 'คุณแม่เหมียว');
+                    foundIntroUserIds.add(uId);
+                } else {
+                    userNamesMap.set(uId, uname);
+                }
             }
 
-            // (ย่อ Logic การดึง Intro เพื่อความกระชับ แต่รักษาโครงสร้าง XML ไว้)
+            const fetchIntrosFromChannel = async (channelId) => {
+                try {
+                    const ch = await interaction.guild.channels.fetch(channelId).catch(() => null);
+                    if (ch && ch.isTextBased()) {
+                        const intros = await ch.messages.fetch({ limit: 100 });
+                        for (const uId of activeUserIds) {
+                            if (foundIntroUserIds.has(uId)) continue;
+                            const userIntro = intros.find(m => m.author.id === uId && m.content.length > 5);
+                            if (userIntro) {
+                                const content = userIntro.content;
+                                const nameMatch = content.match(/ชื่อ\s*:\s*([^\n]+)/);
+                                if (nameMatch) userNamesMap.set(uId, nameMatch[1].trim());
+                                userIntrosMap.set(uId, content);
+                                foundIntroUserIds.add(uId);
+                            }
+                        }
+                    }
+                } catch (e) { console.error(`Intro scan error:`, e); }
+            };
+
+            if (introChId) await fetchIntrosFromChannel(introChId);
+            if (backupIntroChId && foundIntroUserIds.size < activeUserIds.size) await fetchIntrosFromChannel(backupIntroChId);
+
+            for (const [uId, introContent] of userIntrosMap.entries()) {
+                usersContextXml += `  <user name="${userNamesMap.get(uId)}">${introContent}</user>\n`;
+            }
             usersContextXml += "</users_context>";
 
             let finalPersona = char.persona ? char.persona.replace(/{{char}}/gi, char.name) : "";
