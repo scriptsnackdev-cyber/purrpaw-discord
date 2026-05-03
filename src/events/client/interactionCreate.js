@@ -33,21 +33,18 @@ module.exports = {
         interaction.client.interactionCooldowns.set(cooldownKey, now);
 
         try {
-            // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache (เริ่มดึงไว้ก่อนเมี๊ยว🐾) ---
-            const guildDataPromise = getGuildData(interaction.guild.id);
+            // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache ---
+            // ⭐ สำหรับคำสั่ง aichat ให้ Defer ไว้ก่อนทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
+            if (interaction.isChatInputCommand() && interaction.commandName === 'aichat') {
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
+            }
+
+            const { features, settings } = await getGuildData(interaction.guild.id);
 
             // 💾 1. จัดการกรณีเป็น Slash Command
             if (interaction.isChatInputCommand()) {
                 const command = interaction.client.commands.get(interaction.commandName);
                 if (!command) return;
-
-                // ⭐ สำหรับคำสั่งที่รู้ว่าต้องใช้เวลาหรือเป็น Ephemeral ให้ Defer ไว้ก่อนทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
-                if (interaction.commandName === 'aichat') {
-                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
-                }
-
-                // รอข้อมูล Feature/Settings
-                const { features, settings } = await guildDataPromise;
 
                 // ตรวจสอบการเปิดใช้งานฟีเจอร์ (ยกเว้นคำสั่งที่ใช้สำหรับเปิด/ปิดระบบเอง)
                 const subcommand = interaction.options.getSubcommand(false);
