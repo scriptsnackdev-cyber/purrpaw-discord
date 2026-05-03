@@ -2,8 +2,10 @@ const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('disc
 const supabase = require('../../supabaseClient');
 const axios = require('axios');
 
-const VOICE_DETAILS = require('../../utils/voice_details.json');
-const VOICE_RECOMMEND = require('../../utils/voice_recommend.json');
+// Remove local JSON imports as we move to Supabase
+// const VOICE_DETAILS = require('../../utils/voice_details.json');
+// const VOICE_RECOMMEND = require('../../utils/voice_recommend.json');
+
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -121,13 +123,20 @@ module.exports = {
                         });
                         const voice = response.data.voices.find(v => v.voice_id === voiceId);
                         if (voice) {
-                            const detail = VOICE_DETAILS[voiceId];
+                            // Fetch voice detail from Supabase
+                            const { data: detail } = await supabase
+                                .from('tts_voices')
+                                .select('description')
+                                .eq('voice_id', voiceId)
+                                .single();
+
                             if (detail) {
-                                displayName = `${voice.name} (${detail.desc})`;
+                                displayName = `${voice.name} (${detail.description})`;
                             } else {
                                 displayName = voice.name;
                             }
                         }
+
                     } catch (e) {
                         console.error('Fetch Voice Name Error:', e.message);
                     }
@@ -245,10 +254,17 @@ module.exports = {
 
             const voices = response.data.voices;
 
+            // 1. Fetch all voice details from Supabase to merge with ElevenLabs data
+            const { data: dbVoices } = await supabase
+                .from('tts_voices')
+                .select('*');
+
+            const voiceMap = new Map(dbVoices?.map(v => [v.voice_id, v]) || []);
+
             // กรองและสร้างตัวเลือกเมี๊ยว🐾
             const choices = voices
                 .filter(voice => {
-                    const detail = VOICE_DETAILS[voice.voice_id];
+                    const detail = voiceMap.get(voice.voice_id);
                     const gender = detail ? detail.gender : voice.labels?.gender;
 
                     // 1. กรองเพศเมี๊ยว🐾
@@ -258,14 +274,15 @@ module.exports = {
                     if (focusedValue && !voice.name.toLowerCase().includes(focusedValue)) return false;
 
                     // 3. ถ้าไม่ได้พิมพ์อะไรเลย ให้แสดงเฉพาะตัวแนะนำเมี๊ยว🐾
-                    if (!focusedValue && !genderFilter && !VOICE_RECOMMEND.some(v => v.id === voice.voice_id)) return false;
+                    // ตรวจสอบจาก database ว่าเป็น recommended หรือไม่
+                    if (!focusedValue && !genderFilter && !detail?.is_recommended) return false;
 
                     return true;
                 })
                 .sort((a, b) => {
                     // เรียง: ชาย > หญิง > ทั่วไป
                     const getOrder = (vId) => {
-                        const detail = VOICE_DETAILS[vId];
+                        const detail = voiceMap.get(vId);
                         const gender = detail ? detail.gender : 'general';
                         if (gender === 'male') return 1;
                         if (gender === 'female') return 2;
@@ -275,9 +292,9 @@ module.exports = {
                 })
                 .slice(0, 25)
                 .map(voice => {
-                    const detail = VOICE_DETAILS[voice.voice_id];
+                    const detail = voiceMap.get(voice.voice_id);
                     const gender = detail ? detail.gender : voice.labels?.gender;
-                    const desc = detail ? detail.desc : (voice.labels?.description || "ไม่มีคำอธิบาย");
+                    const desc = detail ? detail.description : (voice.labels?.description || "ไม่มีคำอธิบาย");
 
                     let typeLabel = "[GENERAL]";
                     if (gender === "male") typeLabel = "[MALE]";
@@ -294,5 +311,6 @@ module.exports = {
             console.error('Autocomplete Error:', error.message);
             await interaction.respond([]);
         }
+
     },
 };
