@@ -20,7 +20,9 @@ const execFileAsync = promisify(execFile);
 const isWindows = process.platform === 'win32';
 const YTDLP_PATH = isWindows 
     ? path.join(__dirname, '..', 'yt-dlp.exe') 
-    : 'yt-dlp';
+    : (fs.existsSync(path.join(__dirname, '..', 'yt-dlp')) 
+        ? path.join(__dirname, '..', 'yt-dlp') 
+        : 'yt-dlp');
 
 console.log(`🎵 yt-dlp path: ${YTDLP_PATH} (System: ${process.platform})`);
 if (isWindows && !fs.existsSync(YTDLP_PATH)) {
@@ -53,10 +55,12 @@ async function ytdlp(args, useCookie = true) {
 
         return JSON.parse(stdout);
     } catch (err) {
+        console.error(`[yt-dlp] Command failed: ${YTDLP_PATH} ${finalArgs.join(' ')}`);
+        console.error(`[yt-dlp] Error: ${err.message}`);
+        
         // 🚨 ถ้าล้มเหลวขณะใช้ Cookie ให้ลองอีกครั้งแบบไม่ใช้ Cookie เมี๊ยว🐾
-        // (หลายครั้งที่ Cookie หมดอายุหรือโดน YouTube บล็อกแบบเจาะจงบัญชี)
         if (useCookie && process.env.YOUTUBE_COOKIE) {
-            console.warn(`[yt-dlp] Failed with cookie, retrying without cookie... Error: ${err.message}`);
+            console.warn(`[yt-dlp] Retrying without cookie...`);
             return ytdlp(args, false);
         }
         
@@ -142,14 +146,20 @@ const ytdlpPlugin = {
 
     // ── ดึง Stream URL สำหรับ FFmpeg ──
     async getStreamURL(song) {
-        console.log(`[yt-dlp] Getting stream URL: ${song.url}`);
+        console.log(`[yt-dlp] Getting stream URL for: ${song.name} (${song.url})`);
         const info = await ytdlp([
             '--dump-single-json', '--no-warnings',
             '--skip-download', '--simulate', '--no-playlist',
             '--format', 'ba/ba*',  // best audio only
             song.url,
         ]);
-        console.log(`[yt-dlp] Got stream URL ✅`);
+        
+        if (!info.url) {
+            console.error(`[yt-dlp] No stream URL found in metadata for: ${song.name}`);
+            throw new Error('No stream URL found');
+        }
+        
+        console.log(`[yt-dlp] Got stream URL ✅ (Type: ${info.ext || 'unknown'})`);
         return info.url;
     },
 
@@ -206,7 +216,7 @@ const client = new Client({
 });
 
 client.distube = new DisTube(client, {
-    ffmpeg: { path: require('@ffmpeg-installer/ffmpeg').path },
+    ffmpeg: { path: require('ffmpeg-static') },
     emitNewSongOnly: true,
     emitAddSongWhenCreatingQueue: false,
     emitAddListWhenCreatingQueue: false,
