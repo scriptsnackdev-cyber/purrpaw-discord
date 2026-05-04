@@ -112,6 +112,11 @@ module.exports = {
                 character_id: char.id
             });
 
+            // ⚡ ล้าง Cache เพื่อให้บอทเริ่มทำงานทันทีเมี๊ยว🐾
+            if (interaction.client.activeChatCache) {
+                interaction.client.activeChatCache.delete(channelId);
+            }
+
             return interaction.editReply({ content: `✅ **${char.name}** ถูกอัญเชิญมาแล้วเมี๊ยว! 🕯️ พร้อมรับใช้แล้วนะ!` });
         }
 
@@ -144,6 +149,12 @@ module.exports = {
             const target = interaction.options.getString('target');
             if (target === 'here') {
                 await supabase.from('active_ai_chats').delete().eq('channel_id', channelId);
+                
+                // ⚡ ล้าง Cache เมี๊ยว🐾
+                if (interaction.client.activeChatCache) {
+                    interaction.client.activeChatCache.delete(channelId);
+                }
+
                 return interaction.editReply({ content: '🧹 ไล่ AI ทุกตัวออกจากห้องนี้เรียบร้อยแล้วเมี๊ยว! สะอาดกริ๊บ!' });
             }
         }
@@ -162,6 +173,11 @@ module.exports = {
             const { error } = await supabase.from('active_ai_chats').delete().eq('channel_id', channelId).eq('character_id', char.id);
             if (error) return interaction.editReply({ content: 'AI ตัวนี้ไม่ได้อยู่ในห้องนี้อยู่แล้วนะเมี๊ยว' });
 
+            // ⚡ ล้าง Cache เมี๊ยว🐾
+            if (interaction.client.activeChatCache) {
+                interaction.client.activeChatCache.delete(channelId);
+            }
+
             return interaction.editReply({ content: `👋 **${search}** ลากลับบ้านไปพักผ่อนแล้วนะเมี๊ยวว` });
         }
 
@@ -169,6 +185,12 @@ module.exports = {
         if (sub === 'settings') {
             const memory = interaction.options.getInteger('memory');
             await supabase.from('active_ai_chats').update({ memory_limit: memory }).eq('channel_id', channelId);
+            
+            // ⚡ ล้าง Cache เมี๊ยว🐾
+            if (interaction.client.activeChatCache) {
+                interaction.client.activeChatCache.delete(channelId);
+            }
+
             return interaction.editReply({ content: `✅ ตั้งความจำไว้ที่ **${memory}** ข้อความสำหรับห้องนี้แล้วนะเมี๊ยว!` });
         }
 

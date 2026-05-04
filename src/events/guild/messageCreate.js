@@ -22,37 +22,56 @@ module.exports = {
                 await ttsManager.speak(message.guild.id, message.content);
             }
         }
- 
+
         // ── 📝 ระบบบันทึก Log ห้องส่วนตัว (Private Room Logging) ──
         if (message.channel.name?.startsWith('🏠-')) {
-            // ดึงเฉพาะ ID เพื่อเช็คว่ามีห้องอยู่จริงไหมเมี๊ยว🐾
-            const { data: room } = await supabase.from('private_rooms')
-                .select('id')
-                .eq('channel_id', message.channel.id)
-                .eq('is_deleted', false)
-                .single();
+            if (!message.client.privateRoomCache) message.client.privateRoomCache = new Map();
+            let roomCache = message.client.privateRoomCache.get(message.channelId);
+            const now = Date.now();
+            let room = null;
             
+            if (roomCache && (now - roomCache.timestamp < 60000)) {
+                room = roomCache.data;
+            } else {
+                const { data } = await supabase.from('private_rooms')
+                    .select('id')
+                    .eq('channel_id', message.channel.id)
+                    .eq('is_deleted', false)
+                    .single();
+                room = data;
+                message.client.privateRoomCache.set(message.channelId, { data, timestamp: now });
+            }
+
             if (room) {
                 const timeStr = message.createdAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                 const userDisplayName = message.member?.displayName || message.author.username;
                 const logEntry = `[${timeStr}]-[${userDisplayName}] : ${message.content}\n`;
-                
-                // 🚀 ใช้ RPC หรือ อัปเดตแบบไม่รอ (Fire and forget) เพื่อลด Bottleneck เมี๊ยว🐾
-                // หมายเหตุ: ในอนาคตควรใช้ตารางแยกสำหรับ Logs แทนการเก็บในก้อนเดียวเมี๊ยว
-                supabase.rpc('append_private_room_log', { 
-                    room_id: room.id, 
-                    new_log: logEntry 
-                }).then(({ error }) => {
-                    if (error) {
-                        // Fallback ถ้าไม่มี RPC ให้ใช้การอัปเดตแบบเดิมแต่ลดภาระการรอ
-                        supabase.from('private_rooms').select('chat_logs').eq('id', room.id).single().then(({ data }) => {
-                            if (data) {
-                                const updatedLogs = (data.chat_logs || '') + logEntry;
-                                supabase.from('private_rooms').update({ chat_logs: updatedLogs }).eq('id', room.id).catch(() => {});
-                            }
-                        });
-                    }
-                }).catch(() => {});
+
+                if (!message.client.privateRoomLogs) message.client.privateRoomLogs = new Map();
+                let logBuffer = message.client.privateRoomLogs.get(room.id) || "";
+                logBuffer += logEntry;
+                message.client.privateRoomLogs.set(room.id, logBuffer);
+
+                if (!message.client.privateRoomLogTimer) {
+                    message.client.privateRoomLogTimer = setTimeout(() => {
+                        const logsToFlush = new Map(message.client.privateRoomLogs);
+                        message.client.privateRoomLogs.clear();
+                        message.client.privateRoomLogTimer = null;
+                        
+                        for (const [rId, logs] of logsToFlush) {
+                            supabase.rpc('append_private_room_log', { room_id: rId, new_log: logs }).then(({ error }) => {
+                                if (error) {
+                                    supabase.from('private_rooms').select('chat_logs').eq('id', rId).single().then(({ data }) => {
+                                        if (data) {
+                                            const updatedLogs = (data.chat_logs || '') + logs;
+                                            supabase.from('private_rooms').update({ chat_logs: updatedLogs }).eq('id', rId).catch(() => { });
+                                        }
+                                    });
+                                }
+                            }).catch(() => {});
+                        }
+                    }, 5000);
+                }
             }
         }
 
@@ -68,96 +87,110 @@ module.exports = {
 
             if (chatCharCount > 0 && (now - lastXP > 60000)) {
                 message.client.xpCooldowns.set(cooldownKey, now);
-                // 1. ดึงข้อมูลเลเวลเดิมเมี๊ยว🐾
-                let { data: memberLevel } = await supabase
-                    .from('member_levels')
-                    .select('*')
-                    .eq('guild_id', message.guild.id)
-                    .eq('user_id', message.author.id)
-                    .single();
-
-                const oldTotalChars = memberLevel?.total_chars || 0;
-                const newTotalChars = oldTotalChars + chatCharCount;
-                const oldLevel = Math.floor(Math.sqrt(oldTotalChars / xpMultiplier));
-                const newLevel = Math.floor(Math.sqrt(newTotalChars / xpMultiplier));
-
-                // 2. อัปเดตคะแนนเมี๊ยว🐾
-                await supabase.from('member_levels').upsert({
-                    guild_id: message.guild.id,
-                    user_id: message.author.id,
-                    total_chars: newTotalChars
-                });
-
-                // 3. ตรวจสอบการเลเวลอัพเมี๊ยว🐾
-                if (newLevel > oldLevel && newLevel > 0) {
-                    const { data: allRewards } = await supabase
-                        .from('level_rewards')
-                        .select('*')
-                        .eq('guild_id', message.guild.id)
-                        .order('level', { ascending: false });
-
-                    const highestReward = allRewards?.find(r => r.level <= newLevel);
-                    let roleName = null;
-                    let newRole = null;
-
-                    if (highestReward) {
-                        newRole = message.guild.roles.cache.get(highestReward.role_id);
-                        if (newRole) roleName = newRole.name;
-                    }
-
-                    const rewardRoleIds = allRewards ? allRewards.map(r => r.role_id) : [];
-                    if (rewardRoleIds.length > 0) {
-                        const rolesToRemove = message.member.roles.cache.filter(role => 
-                            rewardRoleIds.includes(role.id) && (newRole ? role.id !== newRole.id : true)
-                        );
-                        if (rolesToRemove.size > 0) await message.member.roles.remove(rolesToRemove).catch(() => {});
-                    }
-
-                    if (newRole) await message.member.roles.add(newRole).catch(() => {});
-                    
-                    const { generateLevelUpCard } = require('../../utils/levelCard');
-                    const { AttachmentBuilder } = require('discord.js');
-                    
+                
+                // 🚀 อัปเดตแบบไม่รอ (Non-blocking) เพื่อไม่ให้ขัดจังหวะการแชทเมี๊ยว🐾
+                (async () => {
                     try {
-                        const displayName = message.member?.displayName || message.author.username;
-                        const avatarURL = message.member?.displayAvatarURL({ extension: 'png', size: 256 }) || message.author.displayAvatarURL({ extension: 'png', size: 256 });
-                        const imageBuffer = await generateLevelUpCard(message.author, newLevel, 'Chat', roleName, displayName, avatarURL, settings.rank_background_url);
-                        const attachment = new AttachmentBuilder(imageBuffer, { name: `levelup-${message.author.id}.png` });
-                        
-                        await message.reply({ 
-                            content: `🎊 **ยินดีด้วยนะเมี๊ยววว! <@${message.author.id}> เลเวลอัพแล้ว!** 🐾✨`,
-                            files: [attachment] 
+                        let { data: memberLevel } = await supabase
+                            .from('member_levels')
+                            .select('total_chars')
+                            .eq('guild_id', message.guild.id)
+                            .eq('user_id', message.author.id)
+                            .single();
+
+                        const oldTotalChars = memberLevel?.total_chars || 0;
+                        const newTotalChars = oldTotalChars + chatCharCount;
+                        const oldLevel = Math.floor(Math.sqrt(oldTotalChars / xpMultiplier));
+                        const newLevel = Math.floor(Math.sqrt(newTotalChars / xpMultiplier));
+
+                        await supabase.from('member_levels').upsert({
+                            guild_id: message.guild.id,
+                            user_id: message.author.id,
+                            total_chars: newTotalChars
                         });
-                    } catch (error) {
-                        console.error('Error sending level up card:', error);
-                        await message.reply(`🎊 **ยินดีด้วยนะเมี๊ยววว!** คุณเลเวลอัพเป็น **Level ${newLevel}** แล้วนะเมี๊ยววว! 🐾✨`);
-                    }
-                }
+
+                        if (newLevel > oldLevel && newLevel > 0) {
+                            const { data: allRewards } = await supabase
+                                .from('level_rewards')
+                                .select('*')
+                                .eq('guild_id', message.guild.id)
+                                .order('level', { ascending: false });
+
+                            const highestReward = allRewards?.find(r => r.level <= newLevel);
+                            let roleName = null;
+                            let newRole = null;
+
+                            if (highestReward) {
+                                newRole = message.guild.roles.cache.get(highestReward.role_id);
+                                if (newRole) roleName = newRole.name;
+                            }
+
+                            const rewardRoleIds = allRewards ? allRewards.map(role => role.role_id) : [];
+                            if (rewardRoleIds.length > 0) {
+                                const rolesToRemove = message.member.roles.cache.filter(role => 
+                                    rewardRoleIds.includes(role.id) && (newRole ? role.id !== newRole.id : true)
+                                );
+                                if (rolesToRemove.size > 0) await message.member.roles.remove(rolesToRemove).catch(() => {});
+                            }
+
+                            if (newRole) await message.member.roles.add(newRole).catch(() => {});
+                            
+                            const { generateLevelUpCard } = require('../../utils/levelCard');
+                            const { AttachmentBuilder } = require('discord.js');
+                            
+                            const displayName = message.member?.displayName || message.author.username;
+                            const avatarURL = message.member?.displayAvatarURL({ extension: 'png', size: 256 }) || message.author.displayAvatarURL({ extension: 'png', size: 256 });
+                            const imageBuffer = await generateLevelUpCard(message.author, newLevel, 'Chat', roleName, displayName, avatarURL, settings.rank_background_url);
+                            const attachment = new AttachmentBuilder(imageBuffer, { name: `levelup-${message.author.id}.png` });
+                            
+                            await message.reply({ 
+                                content: `🎊 **ยินดีด้วยนะเมี๊ยววว! <@${message.author.id}> เลเวลอัพแล้ว!** 🐾✨`,
+                                files: [attachment] 
+                            }).catch(() => {});
+                        }
+                    } catch (e) { console.error('Leveling error (silenced):', e); }
+                })();
             }
         }
 
-        // 2. ดึงข้อมูลว่าห้องนี้มี AI ตัวไหนสิงอยู่ (ดึงเฉพาะคอลัมน์ที่ใช้เมี๊ยว🐾)
-        const { data: activeChats } = await supabase
-            .from('active_ai_chats')
-            .select('character_id, memory_limit')
-            .eq('channel_id', message.channelId);
+        // 2. เช็ค AI Status (มีระบบ Cache 30 วินาทีเพื่อลดโหลด DB เมี๊ยว🐾)
+        if (!message.client.activeChatCache) message.client.activeChatCache = new Map();
+        let activeChats = message.client.activeChatCache.get(message.channelId)?.data;
+        const cacheTime = message.client.activeChatCache.get(message.channelId)?.timestamp || 0;
 
-        const guildSettings = settings; // ใช้ settings ที่ดึงมาแล้วด้านบน
+        if (!activeChats || (Date.now() - cacheTime > 30000)) {
+            const { data } = await supabase
+                .from('active_ai_chats')
+                .select('character_id, memory_limit')
+                .eq('channel_id', message.channelId);
+            activeChats = data;
+            message.client.activeChatCache.set(message.channelId, { data, timestamp: Date.now() });
+        }
+
         if (!activeChats || activeChats.length === 0) return;
 
         // 3. ระบบ Debounce (หน่วงเวลา) สำหรับ AI Chat เมี๊ยว🐾
         if (!message.client.aiChatQueues) message.client.aiChatQueues = new Map();
-        
+
         let queueState = message.client.aiChatQueues.get(message.channelId);
         if (!queueState) {
             queueState = {
                 timer: null,
                 firstMessageTime: Date.now(),
                 isProcessing: false,
-                abortController: null,
-                hasPendingMessages: false
+                hasPendingMessages: false,
+                isBotMentioned: false,
+                lastMessage: message
             };
             message.client.aiChatQueues.set(message.channelId, queueState);
+        }
+        
+        // อัปเดต Context ของข้อความล่าสุดเสมอเมี๊ยว🐾
+        queueState.lastMessage = message;
+        
+        const isMentioned = message.mentions.has(message.client.user) || message.content.includes(`<@${message.client.user.id}>`);
+        if (isMentioned) {
+            queueState.isBotMentioned = true;
         }
 
         // หากกำลังประมวลผลอยู่ ไม่ต้องยกเลิก (ยกเว้นผ่านไปนานมากจริงๆ)
@@ -176,32 +209,74 @@ module.exports = {
             queueState.abortController = new AbortController();
             const signal = queueState.abortController.signal;
 
+            // 🚀 แจ้ง Typing เป็นระยะๆ ระหว่างรอ AI เมี๊ยว🐾
+            const typingInterval = setInterval(() => {
+                const latestMsg = queueState?.lastMessage || message;
+                latestMsg.channel.sendTyping().catch(() => {});
+            }, 5000);
+
             try {
-                // เช็คก่อนว่าเป็นห้องส่วนตัวไหมเมี๊ยว🐾
-                const { data: session } = await supabase.from('ai_chat_sessions').select('user_id').eq('channel_id', message.channelId).eq('is_deleted', false).single();
-                const targetUserId = session ? session.user_id : message.author.id;
+                // ใช้ Context จาก Message ล่าสุดในคิวเสมอเมี๊ยว🐾
+                const latestMsg = queueState.lastMessage || message;
+                const { channelId, guild } = latestMsg;
+
+                // เช็คห้องส่วนตัว (มี Cache 1 นาที)
+                if (!message.client.sessionCache) message.client.sessionCache = new Map();
+                let session = message.client.sessionCache.get(channelId)?.data;
+                const sessionCacheTime = message.client.sessionCache.get(channelId)?.timestamp || 0;
+                
+                if (Date.now() - sessionCacheTime > 60000) {
+                    const { data } = await supabase.from('ai_chat_sessions').select('user_id').eq('channel_id', channelId).eq('is_deleted', false).single();
+                    session = data;
+                    message.client.sessionCache.set(channelId, { data, timestamp: Date.now() });
+                }
+
+                const targetUserId = session ? session.user_id : latestMsg.author.id;
                 
                 let targetMember = null;
                 if (session) {
-                    targetMember = await message.guild.members.fetch(targetUserId).catch(() => null);
+                    targetMember = await guild.members.fetch(targetUserId).catch(() => null);
                 }
 
-                // ดึงโปรไฟล์ตัวละครทั้งหมดแบบ Batch เพื่อลดจำนวน Query เมี๊ยว🐾
+                // ดึงโปรไฟล์ตัวละครทั้งหมดแบบ Batch (มี Cache 5 นาที) เมี๊ยว🐾
                 const characterIds = activeChats.map(c => c.character_id);
-                const { data: characterProfiles, error: profileError } = await supabase
-                    .from('ai_characters')
-                    .select('*')
-                    .in('id', characterIds);
+                const characterProfiles = [];
+                const idsToFetch = [];
+                
+                if (!message.client.aiCharCache) message.client.aiCharCache = new Map();
+                
+                for (const cId of characterIds) {
+                    const cached = message.client.aiCharCache.get(cId);
+                    if (cached && Date.now() - cached.timestamp < 300000) {
+                        characterProfiles.push(cached.data);
+                    } else {
+                        idsToFetch.push(cId);
+                    }
+                }
 
-                if (profileError || !characterProfiles || characterProfiles.length === 0) return;
+                if (idsToFetch.length > 0) {
+                    const { data: fetchedChars, error: profileError } = await supabase
+                        .from('ai_characters')
+                        .select('*')
+                        .in('id', idsToFetch);
+
+                    if (profileError || !fetchedChars) return;
+                    
+                    fetchedChars.forEach(char => {
+                        message.client.aiCharCache.set(char.id, { data: char, timestamp: Date.now() });
+                        characterProfiles.push(char);
+                    });
+                }
+
+                if (characterProfiles.length === 0) return;
 
                 // หา Memory Limit สูงสุด
                 const maxMemoryLimit = Math.max(...activeChats.map(c => c.memory_limit || 10), 10);
 
                 // 4. ดึงประวัติแชทและแยกรายชื่อผู้ใช้ (Dynamic Context)
-                const history = await message.channel.messages.fetch({ limit: maxMemoryLimit });
+                const history = await latestMsg.channel.messages.fetch({ limit: maxMemoryLimit });
                 const historyData = Array.from(history.values()).reverse();
-                    
+
                 // หาสมาชิกที่มีส่วนร่วมในแชทล่าสุด
                 const activeUserIds = new Set();
                 historyData.forEach(m => {
@@ -209,41 +284,53 @@ module.exports = {
                 });
 
                 // --- 🌟 PRE-CHECK AI 🌟 ---
-                const recentHistory = historyData.slice(-10).map(m => {
-                    const name = m.author.username;
-                    return `[${name}] : ${m.content}`;
-                }).join('\n');
-                
+                let activeCharNames = [];
                 const botNamesList = characterProfiles.map(c => c.name).join(', ');
-                const userNamesList = Array.from(activeUserIds).map(id => {
-                    const uObj = message.client.users.cache.get(id);
-                    return uObj ? uObj.username : id;
-                }).join(', ');
 
-                const activeCharNames = await checkShouldRespondAI(recentHistory, botNamesList, userNamesList, signal);
+                // 🔔 ถ้าโดน Mention หรือเป็นห้องส่วนตัว ให้ตอบแน่นอนเมี๊ยว🐾
+                const isPrivateRoom = latestMsg.channel.name?.startsWith('🏠-') || !!session;
+                
+                if (queueState.isBotMentioned || isPrivateRoom) {
+                    activeCharNames = characterProfiles.map(c => c.name);
+                    // รีเซ็ต flag เมื่อมีการประมวลผลแล้วเมี๊ยว🐾
+                    queueState.isBotMentioned = false;
+                } else {
+                    const recentHistory = historyData.slice(-10).map(m => {
+                        const name = m.author.username;
+                        return `[${name}] : ${m.content}`;
+                    }).join('\n');
+                    
+                    const userNamesList = Array.from(activeUserIds).map(id => {
+                        const uObj = latestMsg.client.users.cache.get(id);
+                        return uObj ? uObj.username : id;
+                    }).join(', ');
+
+                    activeCharNames = await checkShouldRespondAI(recentHistory, botNamesList, userNamesList, signal);
+                }
+
                 if (!activeCharNames || activeCharNames.length === 0) {
                     return; // ยกเลิกการประมวลผลเพราะไม่มี AI ตัวไหนอยากตอบเมี๊ยว🐾
                 }
 
                 // กรองเฉพาะตัวละครที่จะตอบ (เพื่อลด Token และความสับสน) เมี๊ยว🐾
-                const filteredProfiles = characterProfiles.filter(p => 
+                const filteredProfiles = characterProfiles.filter(p =>
                     activeCharNames.some(name => name.trim().toLowerCase() === p.name.toLowerCase())
                 );
                 // --------------------------
 
                 // 5. ดึงข้อมูลการแนะนำตัว (Introductions)
                 let usersContextXml = "<users_context>\n";
-                const introChId = guildSettings.ai_chat?.intro_channel_id;
-                const backupIntroChId = guildSettings.ai_chat?.intro_backup_channel_id;
-                
+                const introChId = settings.ai_chat?.intro_channel_id;
+                const backupIntroChId = settings.ai_chat?.intro_backup_channel_id;
+
                 const foundIntroUserIds = new Set();
                 const userNamesMap = new Map();
                 const userIntrosMap = new Map();
-                
+
                 for (const uId of activeUserIds) {
                     const uObj = message.client.users.cache.get(uId);
                     const uname = uObj ? uObj.username : uId;
-                    
+
                     if (uname === 'superdupermeow_') {
                         const smIntro = `⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹\nชื่อ: คุณแม่เหมียว\nเพศ: หญิง\nบทบาท: คุณแม่เหมียวในห้อง ห้ามเถียง ห้ามด่า ต้องฟังแม่ ห้ามมารักหรือชอบแม่ ไปชอบลูกแมวเหมียว\n⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹`;
                         userIntrosMap.set(uId, smIntro);
@@ -253,7 +340,7 @@ module.exports = {
                         userNamesMap.set(uId, uname);
                     }
                 }
-                
+
                 const fetchIntrosFromChannel = async (channelId) => {
                     try {
                         if (!message.client.introCache) message.client.introCache = new Map();
@@ -275,7 +362,7 @@ module.exports = {
                         if (intros) {
                             for (const uId of activeUserIds) {
                                 if (foundIntroUserIds.has(uId)) continue;
-                                
+
                                 const userIntro = intros.find(m => m.author.id === uId && m.content.length > 5);
                                 if (userIntro) {
                                     const content = userIntro.content;
@@ -283,7 +370,7 @@ module.exports = {
                                     if (nameMatch) {
                                         userNamesMap.set(uId, nameMatch[1].trim());
                                     }
-                                    
+
                                     userIntrosMap.set(uId, content);
                                     foundIntroUserIds.add(uId);
                                 }
@@ -294,7 +381,7 @@ module.exports = {
 
                 if (introChId) await fetchIntrosFromChannel(introChId);
                 if (backupIntroChId && foundIntroUserIds.size < activeUserIds.size) await fetchIntrosFromChannel(backupIntroChId);
-                
+
                 for (const [uId, introContent] of userIntrosMap.entries()) {
                     usersContextXml += `  <user name="${userNamesMap.get(uId)}">${introContent}</user>\n`;
                 }
@@ -357,7 +444,7 @@ ${roomStatusXml}`;
                 historyData.forEach((m, index) => {
                     const time = m.createdAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
                     const name = userNamesMap.get(m.author.id) || m.author.username;
-                    
+
                     let replyAttr = "";
                     if (m.reference && m.reference.messageId) {
                         const refMsg = historyData.find(msg => msg.id === m.reference.messageId);
@@ -376,7 +463,7 @@ ${roomStatusXml}`;
 
                     if (index === historyData.length - 1 && !m.author.bot) {
                         const contentArray = [{ type: 'text', text: xmlMessage }];
-                        
+
                         if (m.attachments.size > 0) {
                             m.attachments.forEach(att => {
                                 if (att.contentType?.startsWith('image/')) {
@@ -413,9 +500,9 @@ ${roomStatusXml}`;
 
                 // 8. เรียก AI
                 await message.channel.sendTyping();
-                
+
                 let aiResponse = await getChatAI(messagesForAI, signal);
-                
+
                 // 9. แยกแยะและประมวลผล XML Responses (Design v2)
                 if (!aiResponse || typeof aiResponse !== 'string') return;
 
@@ -425,7 +512,7 @@ ${roomStatusXml}`;
 
                 let personaMatch;
                 const responses = [];
-                
+
                 while ((personaMatch = personaRegex.exec(aiResponse)) !== null) {
                     const charName = personaMatch[1].trim();
                     const action = personaMatch[2];
@@ -441,7 +528,7 @@ ${roomStatusXml}`;
                         });
                     }
                 }
-                
+
                 // Fallback กรณี AI หลุดฟอร์แมตเมี๊ยว🐾
                 if (responses.length === 0) {
                     const legacyRegex = /<\s*(?:[a-zA-Z0-9_]+_)?response\s+name=["']([^"']+)["'][^>]*>([\s\S]*?)<\/\s*(?:[a-zA-Z0-9_]+_)?response\s*>/gi;
@@ -453,36 +540,36 @@ ${roomStatusXml}`;
                         });
                     }
                 }
-                
+
                 // กรองผลลัพธ์สุดท้ายให้เหลือแค่ตัวละครที่ได้รับอนุญาตให้ตอบเท่านั้นเมี๊ยว🐾
-                const allowedResponses = responses.filter(resp => 
+                const allowedResponses = responses.filter(resp =>
                     filteredProfiles.some(p => p.name.toLowerCase() === resp.name.toLowerCase())
                 );
-                
+
                 // 10. จัดการ Webhook และส่งข้อความ
                 if (!message.client.webhookCache) message.client.webhookCache = new Map();
                 let webhook = message.client.webhookCache.get(message.channelId);
-                
+
                 if (!webhook) {
                     const webhooks = await message.channel.fetchWebhooks();
                     webhook = webhooks.find(wh => wh.name === 'PurrPaw-AI');
                     if (!webhook) webhook = await message.channel.createWebhook({ name: 'PurrPaw-AI', reason: 'AI Persona Chat' });
                     message.client.webhookCache.set(message.channelId, webhook);
                 }
-                
+
                 for (const resp of allowedResponses) {
                     const charProfile = filteredProfiles.find(c => c.name.toLowerCase() === resp.name.toLowerCase()) || filteredProfiles[0];
-                    
+
                     let finalMsg = resp.message;
-                    
+
                     // ล้างแท็ก <thinking> ออก
                     finalMsg = finalMsg.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
                     finalMsg = finalMsg.replace(/<\/?thinking>/gi, '').trim();
 
                     // ล้าง Header ที่ AI อาจจะเผลอใส่มา (เช่น [23:40] น๊อต : ...) ออกให้หมดทุกบรรทัดเมี๊ยว🐾
                     finalMsg = finalMsg.replace(/^\[\d{2}:\d{2}\]\s*[^:]+\s*:\s*/gm, '').trim();
-                    
-                    if (!finalMsg || finalMsg.length === 0) continue; 
+
+                    if (!finalMsg || finalMsg.length === 0) continue;
                     // หาก AI เผลอส่งแท็ก [GIF: ...] มา ให้ลบทิ้ง
                     finalMsg = finalMsg.replace(/\[GIF:\s*(.+?)\]/gi, '').trim();
 
@@ -509,6 +596,7 @@ ${roomStatusXml}`;
                     console.error('Real AI Error:', err);
                 }
             } finally {
+                clearInterval(typingInterval);
                 queueState.isProcessing = false;
                 // ถ้ามีข้อความค้างอยู่ให้รันต่อเมี๊ยว🐾
                 if (queueState.hasPendingMessages) {
@@ -529,7 +617,7 @@ ${roomStatusXml}`;
             clearTimeout(queueState.timer);
         }
 
-        message.channel.sendTyping().catch(() => {});
+        message.channel.sendTyping().catch(() => { });
 
         if (timeSinceFirstMessage >= 7000) {
             runAILogic().catch(console.error);
