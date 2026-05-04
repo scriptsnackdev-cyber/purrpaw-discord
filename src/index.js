@@ -223,7 +223,7 @@ const client = new Client({
 });
 
 client.distube = new DisTube(client, {
-    ffmpeg: { path: require('ffmpeg-static') },
+    ffmpeg: { path: fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : (fs.existsSync('/usr/local/bin/ffmpeg') ? '/usr/local/bin/ffmpeg' : require('ffmpeg-static')) },
     emitNewSongOnly: true,
     emitAddSongWhenCreatingQueue: false,
     emitAddListWhenCreatingQueue: false,
