@@ -2,6 +2,24 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 const supabase = require('../../supabaseClient');
 const { invalidateCache } = require('../../utils/guildCache');
 
+let globalCharsCache = null;
+let globalCharsCacheTime = 0;
+
+async function getAutocompleteChars() {
+    const now = Date.now();
+    // Cache for 5 minutes
+    if (globalCharsCache && (now - globalCharsCacheTime < 300000)) {
+        return globalCharsCache;
+    }
+    const { data } = await supabase.from('ai_characters').select('id, name, guild_id, is_public');
+    if (data) {
+        globalCharsCache = data;
+        globalCharsCacheTime = now;
+        return data;
+    }
+    return globalCharsCache || [];
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('aichat')
@@ -85,6 +103,8 @@ module.exports = {
             }).select().single();
 
             if (error) return interaction.editReply({ content: '❌ ฮืออ สร้างตัวละคร AI ไม่สำเร็จเมี๊ยว...' });
+            
+            globalCharsCacheTime = 0; // Invalidate autocomplete cache
             
             const embed = new EmbedBuilder()
                 .setTitle(`✅ สร้าง AI สำเร็จแล้วเมี๊ยว: ${name}`)
@@ -458,21 +478,19 @@ ${usersContextXml}`;
     },
 
     async autocomplete(interaction) {
-        const focusedValue = interaction.options.getFocused();
+        const focusedValue = interaction.options.getFocused().toLowerCase();
         const guildId = interaction.guild.id;
 
-        const { data: chars } = await supabase
-            .from('ai_characters')
-            .select('id, name')
-            .or(`guild_id.eq.${guildId},is_public.eq.true`)
-            .ilike('name', `%${focusedValue}%`)
-            .limit(25);
+        const allChars = await getAutocompleteChars();
 
-        if (!chars) return;
+        const filtered = allChars.filter(c => 
+            (c.guild_id === guildId || c.is_public) && 
+            c.name.toLowerCase().includes(focusedValue)
+        ).slice(0, 25);
 
         try {
             await interaction.respond(
-                chars.map(c => ({ name: c.name, value: c.id }))
+                filtered.map(c => ({ name: c.name, value: c.id }))
             );
         } catch (err) {
             if (err.code === 10062) return; // Silent on Unknown Interaction
