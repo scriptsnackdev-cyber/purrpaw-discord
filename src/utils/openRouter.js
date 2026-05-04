@@ -1,26 +1,6 @@
 const axios = require('axios');
-const fs = require('fs').promises;
-const path = require('path');
 
-/**
- * 📝 Helper สำหรับบันทึก Log ลง ai_log.txt เมี๊ยว🐾
- */
-async function appendToAiLog(type, systemPrompt, input, output) {
-    try {
-        const logPath = path.join(process.cwd(), 'ai_log.txt');
-        const timeStr = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
-        
-        let logData = `\n========== [${timeStr}] AI ${type.toUpperCase()} LOG ==========\n`;
-        logData += `[SYSTEM PROMPT]\n${systemPrompt}\n\n`;
-        logData += `[INPUT]\n${typeof input === 'string' ? input : JSON.stringify(input, null, 2)}\n\n`;
-        logData += `[OUTPUT]\n${output}\n`;
-        logData += `==============================================\n`;
-        
-        await fs.appendFile(logPath, logData, 'utf8');
-    } catch (err) {
-        console.error(`[AI Log Error] Failed to write ${type} log:`, err);
-    }
-}
+
 
 /**
  * OpenRouter AI Utility for Fortune
@@ -82,10 +62,7 @@ async function getChatAI(messages, signal = null) {
         );
         const aiResponse = response.data.choices[0].message.content;
         
-        // บันทึก Log เมี๊ยว🐾
-        const systemMsg = messages.find(m => m.role === 'system')?.content || 'No System Prompt';
-        const userMsgs = messages.filter(m => m.role !== 'system');
-        await appendToAiLog('Chat', systemMsg, userMsgs, aiResponse);
+
 
         return aiResponse;
     } catch (error) {
@@ -145,8 +122,7 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
 
         const content = response.data.choices[0].message.content;
         
-        // บันทึก Log สำหรับ Pre-check เมี๊ยว🐾
-        await appendToAiLog('Pre-Check', systemPrompt, recentHistory, content);
+
 
         const activeBots = [];
         

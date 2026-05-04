@@ -25,8 +25,9 @@ module.exports = {
  
         // ── 📝 ระบบบันทึก Log ห้องส่วนตัว (Private Room Logging) ──
         if (message.channel.name?.startsWith('🏠-')) {
+            // ดึงเฉพาะ ID เพื่อเช็คว่ามีห้องอยู่จริงไหมเมี๊ยว🐾
             const { data: room } = await supabase.from('private_rooms')
-                .select('id, chat_logs')
+                .select('id')
                 .eq('channel_id', message.channel.id)
                 .eq('is_deleted', false)
                 .single();
@@ -36,8 +37,22 @@ module.exports = {
                 const userDisplayName = message.member?.displayName || message.author.username;
                 const logEntry = `[${timeStr}]-[${userDisplayName}] : ${message.content}\n`;
                 
-                const newLogs = (room.chat_logs || '') + logEntry;
-                await supabase.from('private_rooms').update({ chat_logs: newLogs }).eq('id', room.id);
+                // 🚀 ใช้ RPC หรือ อัปเดตแบบไม่รอ (Fire and forget) เพื่อลด Bottleneck เมี๊ยว🐾
+                // หมายเหตุ: ในอนาคตควรใช้ตารางแยกสำหรับ Logs แทนการเก็บในก้อนเดียวเมี๊ยว
+                supabase.rpc('append_private_room_log', { 
+                    room_id: room.id, 
+                    new_log: logEntry 
+                }).then(({ error }) => {
+                    if (error) {
+                        // Fallback ถ้าไม่มี RPC ให้ใช้การอัปเดตแบบเดิมแต่ลดภาระการรอ
+                        supabase.from('private_rooms').select('chat_logs').eq('id', room.id).single().then(({ data }) => {
+                            if (data) {
+                                const updatedLogs = (data.chat_logs || '') + logEntry;
+                                supabase.from('private_rooms').update({ chat_logs: updatedLogs }).eq('id', room.id).catch(() => {});
+                            }
+                        });
+                    }
+                }).catch(() => {});
             }
         }
 
@@ -171,21 +186,17 @@ module.exports = {
                     targetMember = await message.guild.members.fetch(targetUserId).catch(() => null);
                 }
 
-                // ดึงโปรไฟล์ตัวละครทั้งหมด และหา Memory Limit สูงสุด
-                const characterProfiles = [];
-                let maxMemoryLimit = 10;
-                
-                for (const chat of activeChats) {
-                    const { data: char } = await supabase.from('ai_characters').select('*').eq('id', chat.character_id).single();
-                    if (char) {
-                        characterProfiles.push(char);
-                        if (chat.memory_limit > maxMemoryLimit) {
-                            maxMemoryLimit = chat.memory_limit;
-                        }
-                    }
-                }
-                
-                if (characterProfiles.length === 0) return;
+                // ดึงโปรไฟล์ตัวละครทั้งหมดแบบ Batch เพื่อลดจำนวน Query เมี๊ยว🐾
+                const characterIds = activeChats.map(c => c.character_id);
+                const { data: characterProfiles, error: profileError } = await supabase
+                    .from('ai_characters')
+                    .select('*')
+                    .in('id', characterIds);
+
+                if (profileError || !characterProfiles || characterProfiles.length === 0) return;
+
+                // หา Memory Limit สูงสุด
+                const maxMemoryLimit = Math.max(...activeChats.map(c => c.memory_limit || 10), 10);
 
                 // 4. ดึงประวัติแชทและแยกรายชื่อผู้ใช้ (Dynamic Context)
                 const history = await message.channel.messages.fetch({ limit: maxMemoryLimit });
@@ -245,9 +256,23 @@ module.exports = {
                 
                 const fetchIntrosFromChannel = async (channelId) => {
                     try {
-                        const ch = await message.guild.channels.fetch(channelId).catch(() => null);
-                        if (ch && ch.isTextBased()) {
-                            const intros = await ch.messages.fetch({ limit: 100 });
+                        if (!message.client.introCache) message.client.introCache = new Map();
+                        const cacheKey = `${message.guild.id}-${channelId}`;
+                        const cached = message.client.introCache.get(cacheKey);
+                        const now = Date.now();
+
+                        let intros;
+                        if (cached && (now - cached.timestamp < 300000)) { // Cache 5 นาทีเมี๊ยว🐾
+                            intros = cached.data;
+                        } else {
+                            const ch = await message.guild.channels.fetch(channelId).catch(() => null);
+                            if (ch && ch.isTextBased()) {
+                                intros = await ch.messages.fetch({ limit: 100 });
+                                message.client.introCache.set(cacheKey, { data: intros, timestamp: now });
+                            }
+                        }
+
+                        if (intros) {
                             for (const uId of activeUserIds) {
                                 if (foundIntroUserIds.has(uId)) continue;
                                 
