@@ -34,9 +34,16 @@ if (isWindows && !fs.existsSync(YTDLP_PATH)) {
 async function ytdlp(args, useCookie = true) {
     const finalArgs = [...args];
     
-    // ถ้ามี Cookie ใน .env และต้องการใช้ ให้ส่งไปด้วยเมี๊ยว🐾
-    if (useCookie && process.env.YOUTUBE_COOKIE) {
-        finalArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
+    // 🍪 จัดการเรื่อง Cookie เพื่อเลี่ยงการโดน YouTube บล็อกเมี๊ยว🐾
+    if (useCookie) {
+        const cookiePath = path.join(__dirname, '..', 'cookies.txt');
+        if (fs.existsSync(cookiePath)) {
+            // วิธีที่ 1: ใช้ไฟล์ cookies.txt (แนะนำที่สุดเมี๊ยว)
+            finalArgs.push('--cookies', cookiePath);
+        } else if (process.env.YOUTUBE_COOKIE) {
+            // วิธีที่ 2: ใช้จาก .env (ถ้าไม่มีไฟล์)
+            finalArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
+        }
     }
 
     // เพิ่ม flag พื้นฐานเพื่อความเสถียรเมี๊ยว🐾
