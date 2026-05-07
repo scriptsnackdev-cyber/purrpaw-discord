@@ -9,8 +9,8 @@ const path = require('path');
 const logPath = path.join(__dirname, '../../ai_log.txt');
 
 function logAI(type, rawData) {
-    // ตรวจสอบว่าเปิดการเก็บ Log หรือไม่ (ค่าเริ่มต้นคือ false ถ้าไม่ได้ตั้งไว้) เมี๊ยว🐾
-    if (process.env.ENABLE_AI_LOG !== 'false') return;
+    // ตรวจสอบว่าเปิดการเก็บ Log หรือไม่ (ถ้าตั้งเป็น false จะไม่เก็บ) เมี๊ยว🐾
+    if (process.env.ENABLE_AI_LOG === 'false') return;
 
     const now = new Date();
     const timestamp = now.toTimeString().split(' ')[0]; // HH:MM:SS

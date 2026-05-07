@@ -91,9 +91,9 @@ async function getChatAI(messages, signal = null) {
     });
 
     try {
-        // SDK ของ Vertex เวอร์ชั่นนี้อาจไม่ได้รองรับ signal แบบตรงๆ ผ่าน axios
-        // แต่เราจะใช้การคัดกรองเบื้องต้นเมี๊ยว🐾
-        const result = await model.generateContent({ contents });
+        // ตั้งค่า Timeout ให้ยาวขึ้นเป็น 60 วินาทีเพื่อป้องกัน Headers Timeout Error เมี๊ยว🐾
+        const requestOptions = { timeout: 60000 };
+        const result = await model.generateContent({ contents }, requestOptions);
         return result.response.candidates[0].content.parts[0].text;
     } catch (error) {
         console.error(`[Vertex AI] Chat Error (${modelName}):`, error);

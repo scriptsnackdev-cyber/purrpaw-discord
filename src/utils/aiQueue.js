@@ -29,15 +29,22 @@ class AIQueue {
 
         const { taskFn, resolve, reject } = this.queue.shift();
         this.running++;
+        const startTime = Date.now();
+        const taskId = Math.random().toString(36).substring(7);
+
+        console.log(`[Queue Info] Task ${taskId} started. Running: ${this.running}, Waiting: ${this.queue.length}`);
 
         try {
             const result = await taskFn();
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.log(`[Queue Info] Task ${taskId} completed in ${duration}s.`);
             resolve(result);
         } catch (error) {
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.error(`[Queue Info] Task ${taskId} failed after ${duration}s:`, error.message || error);
             reject(error);
         } finally {
             this.running--;
-            // เรียกประมวลผลงานถัดไปทันทีเมี๊ยว🐾
             this.process();
         }
     }

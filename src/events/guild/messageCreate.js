@@ -267,8 +267,8 @@ module.exports = {
 
                 if (characterProfiles.length === 0) return;
 
-                // หา Memory Limit สูงสุด
-                const maxMemoryLimit = Math.max(...activeChats.map(c => c.memory_limit || 10), 10);
+                // หา Memory Limit สูงสุด (จำกัดไม่เกิน 15 เพื่อความเร็วเมี๊ยว🐾)
+                const maxMemoryLimit = Math.min(Math.max(...activeChats.map(c => c.memory_limit || 10), 10), 15);
 
                 // 4. ดึงประวัติแชทและแยกรายชื่อผู้ใช้ (Dynamic Context)
                 const history = await latestMsg.channel.messages.fetch({ limit: maxMemoryLimit });
