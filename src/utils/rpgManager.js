@@ -1,5 +1,5 @@
 const supabase = require('../supabaseClient');
-const { getChatAI } = require('./openRouter');
+const { getChatAI } = require('./aiProvider');
 const { generateRPGImage } = require('./rpgImage');
 const globalAIQueue = require('./aiQueue');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');

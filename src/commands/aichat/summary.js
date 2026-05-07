@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getSummaryAI } = require('../../utils/openRouter');
+const { getSummaryAI } = require('../../utils/aiProvider');
 
 module.exports = {
     data: new SlashCommandBuilder()

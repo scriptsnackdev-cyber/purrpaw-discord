@@ -186,7 +186,16 @@ function startDashboard(client) {
         } catch (error) { res.status(500).json({ error: error.message }); }
     });
 
-    server.listen(PORT, () => console.log(`🚀 Dashboard UI is running at: http://localhost:${PORT}`));
+    server.listen(PORT, () => console.log(`🚀 Dashboard UI is running at: http://localhost:${PORT}`))
+          .on('error', (err) => {
+              if (err.code === 'EADDRINUSE') {
+                  const nextPort = parseInt(PORT) + 1;
+                  console.log(`⚠️ Port ${PORT} ไม่ว่างเมี๊ยว... กำลังลองใช้ Port ${nextPort} แทนนะ🐾`);
+                  server.listen(nextPort);
+              } else {
+                  console.error(err);
+              }
+          });
 }
 
 function formatMessage(m) {

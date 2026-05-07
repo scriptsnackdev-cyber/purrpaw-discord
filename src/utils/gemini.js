@@ -1,17 +1,16 @@
 const axios = require('axios');
 
-
-
 /**
- * OpenRouter AI Utility for Fortune
+ * Gemini AI Utility (OpenAI-Compatible Endpoint)
  */
+
 async function getFortuneAI(prompt, userMessage) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.FORTUNE_MODEL || process.env.OPENROUTER_FORTUNE_MODEL || 'google/gemini-2.0-flash-exp:free';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.FORTUNE_MODEL || process.env.GEMINI_FORTUNE_MODEL || 'gemini-1.5-flash';
 
     try {
         const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
             {
                 model: model,
                 messages: [
@@ -27,23 +26,21 @@ async function getFortuneAI(prompt, userMessage) {
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('OpenRouter AI Error:', error.response?.data || error.message);
+        console.error('Gemini AI Error (Fortune):', error.response?.data || error.message);
         throw error;
     }
 }
 
 /**
  * General Chat AI with Memory support
- * @param {Array} messages - Array of {role: 'system'|'user'|'assistant', content: string}
- * @param {AbortSignal} signal - Optional abort signal
  */
 async function getChatAI(messages, signal = null) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.AICHAT_MODEL || process.env.OPENROUTER_AICHAT_MODEL || 'google/gemini-2.0-flash-exp:free';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.AICHAT_MODEL || process.env.GEMINI_AICHAT_MODEL || 'gemini-1.5-flash';
 
     try {
         const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
             {
                 model: model,
                 messages: messages,
@@ -52,40 +49,33 @@ async function getChatAI(messages, signal = null) {
             { 
                 headers: { 
                     'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': 'https://github.com/purrpaw',
-                    'X-Title': 'PurrPaw Discord Bot'
+                    'Content-Type': 'application/json'
                 },
                 timeout: 45000,
                 signal: signal
             }
         );
-        const aiResponse = response.data.choices[0].message.content;
-        
-
-
-        return aiResponse;
+        return response.data.choices[0].message.content;
     } catch (error) {
         if (error.name === 'AbortError' || error.name === 'CanceledError') {
             return null;
         }
         const errorDetail = error.response?.data?.error?.message || error.response?.data || error.message;
-        console.error(`[OpenRouter] Chat AI Error (${model}):`, errorDetail);
+        console.error(`[Gemini] Chat AI Error (${model}):`, errorDetail);
         
         if (error.response?.status === 429) {
-            return "🐾 *แงงง คนใช้เยอะมากจนแมวตอบไม่ทันแล้วเมี๊ยววว* (Rate Limit)";
+            return "🐾 *แงงง คนใช้เยอะมากจนแมวตอบไม่ทันแล้วเมี๊ยววว* (Gemini Rate Limit)";
         }
-        return "🐾 *แมวตัวนั้นดูเหมือนจะหลับปุ๋ยไปแล้วเมี๊ยว...* (OpenRouter Error)";
+        return "🐾 *แมวตัวนั้นดูเหมือนจะหลับปุ๋ยไปแล้วเมี๊ยว...* (Gemini Error)";
     }
 }
 
 /**
- * ตรวจสอบว่าควรตอบโต้หรือไม่ และใครควรเป็นคนตอบเมี๊ยว🐾
- * @returns {Promise<string[]|null>} รายชื่อบอทที่ควรตอบ หรือ null ถ้าไม่ควรตอบเลย
+ * ตรวจสอบว่าควรตอบโต้หรือไม่ และใครควรเป็นคนตอบ
  */
 async function checkShouldRespondAI(recentHistory, botNames, userNames, signal = null) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.PRECHECK_MODEL || process.env.OPENROUTER_PRECHECK_MODEL || 'google/gemini-2.0-flash-exp:free';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.PRECHECK_MODEL || process.env.GEMINI_PRECHECK_MODEL || 'gemini-1.5-flash';
 
     const systemPrompt = `You are a conversation analyzer for a multi-persona AI chat system.
 Your task is to determine which AI characters (if any) should respond to the latest conversation context.
@@ -106,7 +96,7 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
 
     try {
         const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
             {
                 model: model,
                 messages: [
@@ -126,37 +116,30 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
         );
 
         const content = response.data.choices[0].message.content;
-        
-
-
         const activeBots = [];
-        
-        // ค้นหา <persona name="Name">Yes</persona> (รองรับช่องว่างเผื่อ AI ใส่มาเมี๊ยว🐾)
         const regex = /<persona\s+name\s*=\s*"([^"]+)"\s*>\s*Yes\s*<\/persona>/gi;
         let match;
         while ((match = regex.exec(content)) !== null) {
-            const botName = match[1].trim();
-            activeBots.push(botName);
+            activeBots.push(match[1].trim());
         }
 
         return activeBots.length > 0 ? activeBots : null;
     } catch (error) {
         if (error.name === 'AbortError' || error.name === 'CanceledError') return null;
-        const errorDetail = error.response?.data?.error?.message || error.response?.data || error.message;
-        console.error(`[OpenRouter] Pre-check Error (${model}):`, errorDetail);
+        console.error(`[Gemini] Pre-check Error:`, error.response?.data || error.message);
         return null; 
     }
 }
 
 async function getInitialAI(userPrompt, guildName = "Unknown Server") {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.INITIAL_MODEL || process.env.OPENROUTER_INITIAL_MODEL || 'google/gemini-2.0-flash-exp:free';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.INITIAL_MODEL || process.env.GEMINI_INITIAL_MODEL || 'gemini-1.5-flash';
 
     const systemPrompt = `คุณคือสถาปนิกออกแบบ Discord Server มืออาชีพ... (เนื้อหาถูกย่อเพื่อความรวดเร็วเมี๊ยว🐾)`;
 
     try {
         const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
             {
                 model: model,
                 messages: [
@@ -166,29 +149,26 @@ async function getInitialAI(userPrompt, guildName = "Unknown Server") {
                 temperature: 0.5
             },
             { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 timeout: 60000 
             }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('Initial AI Error:', error.response?.data || error.message);
-        throw new Error("ไม่สามารถติดต่อ AI เพื่อออกแบบเซิฟเวอร์ได้เมี๊ยว...");
+        console.error('Gemini Initial AI Error:', error.response?.data || error.message);
+        throw new Error("ไม่สามารถติดต่อ Gemini เพื่อออกแบบเซิฟเวอร์ได้เมี๊ยว...");
     }
 }
 
 async function getRoleButtonAI(userPrompt) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.ROLE_MODEL || process.env.OPENROUTER_ROLE_MODEL || 'google/gemini-2.0-flash-exp:free';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.ROLE_MODEL || process.env.GEMINI_ROLE_MODEL || 'gemini-1.5-flash';
 
     const systemPrompt = `คุณคือผู้ช่วยออกแบบระบบ Role ใน Discord...`;
 
     try {
         const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
             {
                 model: model,
                 messages: [
@@ -198,29 +178,26 @@ async function getRoleButtonAI(userPrompt) {
                 temperature: 0.7
             },
             { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 timeout: 30000
             }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('Role AI Error:', error.message);
-        throw new Error("ไม่สามารถติดต่อ AI เพื่อออกแบบยศได้เมี๊ยว...");
+        console.error('Gemini Role AI Error:', error.message);
+        throw new Error("ไม่สามารถติดต่อ Gemini เพื่อออกแบบยศได้เมี๊ยว...");
     }
 }
 
 async function getSummaryAI(chatBlock) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.SUMMARY_MODEL || process.env.OPENROUTER_SUMMARY_MODEL || 'google/gemini-2.0-flash-exp:free';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.SUMMARY_MODEL || process.env.GEMINI_SUMMARY_MODEL || 'gemini-1.5-flash';
 
     const systemPrompt = `คุณคือ "PurrPaw" บอทแมวสรุปความฉลาดปราดเปรื่อง...`;
 
     try {
         const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
             {
                 model: model,
                 messages: [
@@ -230,16 +207,13 @@ async function getSummaryAI(chatBlock) {
                 temperature: 0.5
             },
             { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
                 timeout: 30000
             }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('Summary AI Error:', error.message);
+        console.error('Gemini Summary AI Error:', error.message);
         throw new Error("งื้อออ ผมสรุปให้ไม่ได้เมี๊ยว...");
     }
 }

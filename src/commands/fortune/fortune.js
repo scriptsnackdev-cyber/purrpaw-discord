@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const { invalidateCache } = require('../../utils/guildCache');
-const { getFortuneAI } = require('../../utils/openRouter');
+const { getFortuneAI } = require('../../utils/aiProvider');
 
 
 const TAROT_CARDS = {

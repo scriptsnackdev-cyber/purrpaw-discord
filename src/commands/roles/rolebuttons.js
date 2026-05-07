@@ -193,7 +193,7 @@ module.exports = {
 
             if (subcommand === 'add') {
                 const prompt = interaction.options.getString('prompt');
-                const { getRoleButtonAI } = require('../../utils/openRouter');
+                const { getRoleButtonAI } = require('../../utils/aiProvider');
 
                 try {
                     const aiResponse = await getRoleButtonAI(prompt);

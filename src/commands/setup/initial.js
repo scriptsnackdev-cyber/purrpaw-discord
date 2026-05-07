@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, EmbedBuilder } = require('discord.js');
-const { getInitialAI } = require('../../utils/openRouter');
+const { getInitialAI } = require('../../utils/aiProvider');
 const { invalidateCache } = require('../../utils/guildCache');
 
 module.exports = {

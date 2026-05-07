@@ -3,6 +3,7 @@ const { getGuildData } = require('../../utils/guildCache');
 const supabase = require('../../supabaseClient');
 const { handleRPGAction } = require('../../utils/rpgManager');
 const { generateRPGImage } = require('../../utils/rpgImage');
+const { checkPermission } = require('../../utils/permissionManager');
 
 
 module.exports = {
@@ -45,6 +46,14 @@ module.exports = {
             if (interaction.isChatInputCommand()) {
                 const command = interaction.client.commands.get(interaction.commandName);
                 if (!command) return;
+
+                // 🛡️ เช็คสิทธิ์การใช้งานคำสั่ง (Admin/Everyone) เมี๊ยว🐾
+                if (!checkPermission(interaction, interaction.commandName)) {
+                    return interaction.reply({ 
+                        content: '❌ คุณไม่มีสิทธิ์ใช้งานคำสั่งนี้เมี๊ยว! (เฉพาะผู้ดูแลระบบหรือผู้ที่มีสิทธิ์เท่านั้น🐾)', 
+                        flags: [MessageFlags.Ephemeral] 
+                    }).catch(() => {});
+                }
 
                 // ตรวจสอบการเปิดใช้งานฟีเจอร์ (ยกเว้นคำสั่งที่ใช้สำหรับเปิด/ปิดระบบเอง)
                 const subcommand = interaction.options.getSubcommand(false);

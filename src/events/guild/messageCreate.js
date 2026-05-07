@@ -1,7 +1,7 @@
 const { Events } = require('discord.js');
 const { getGuildData } = require('../../utils/guildCache');
 const supabase = require('../../supabaseClient');
-const { getChatAI, checkShouldRespondAI } = require('../../utils/openRouter');
+const { getChatAI, checkShouldRespondAI } = require('../../utils/aiProvider');
 const { searchGif } = require('../../utils/tenor');
 const globalAIQueue = require('../../utils/aiQueue');
 
@@ -280,48 +280,25 @@ module.exports = {
                     if (!m.author.bot) activeUserIds.add(m.author.id);
                 });
 
-                // --- 🌟 PRE-CHECK AI 🌟 ---
-                let activeCharNames = [];
-                const botNamesList = characterProfiles.map(c => c.name).join(', ');
-
-                // 🔔 ถ้าโดน Mention หรือเป็นห้องส่วนตัว ให้ตอบแน่นอนเมี๊ยว🐾
-                const isPrivateRoom = latestMsg.channel.name?.startsWith('🏠-') || !!session;
+                // --- 🚀 FAST AI MODE: SKIP PRE-CHECK 🚀 ---
+                // ส่งรายชื่อตัวละครทั้งหมดไปให้ AI ตัดสินใจเองในรอบเดียวเมี๊ยว🐾
+                let activeCharNames = characterProfiles.map(c => c.name);
                 
-                if (queueState.isBotMentioned || isPrivateRoom) {
-                    activeCharNames = characterProfiles.map(c => c.name);
-                    // รีเซ็ต flag เมื่อมีการประมวลผลแล้วเมี๊ยว🐾
-                    queueState.isBotMentioned = false;
-                } else {
-                    const recentHistory = historyData.slice(-10).map(m => {
-                        const name = m.author.username;
-                        return `[${name}] : ${m.content}`;
-                    }).join('\n');
-                    
-                    const userNamesList = Array.from(activeUserIds).map(id => {
-                        const uObj = latestMsg.client.users.cache.get(id);
-                        return uObj ? uObj.username : id;
-                    }).join(', ');
-
-                    activeCharNames = await globalAIQueue.run(() => checkShouldRespondAI(recentHistory, botNamesList, userNamesList, signal));
-                    if (!activeCharNames) {
-                        console.log(`[AI Info] AI1 (checkShouldRespondAI) decided not to respond or encountered an error for channel ${message.channelId}`);
-                    }
-                }
-
-                if (!activeCharNames || activeCharNames.length === 0) {
-                    return; // ยกเลิกการประมวลผลเพราะไม่มี AI ตัวไหนอยากตอบเมี๊ยว🐾
-                }
-
-                // 🚀 เริ่มแจ้ง Typing เมื่อ AI ตกลงว่าจะตอบแล้วเมี๊ยว🐾
+                // 🚀 เริ่มแจ้ง Typing ทันทีเพื่อความลื่นไหลเมี๊ยว🐾
                 await latestMsg.channel.sendTyping().catch(() => {});
                 typingInterval = setInterval(() => {
                     latestMsg.channel.sendTyping().catch(() => {});
                 }, 5000);
+                
+                // ข้ามการเรียก checkShouldRespondAI เดิม
+                /* 
+                if (queueState.isBotMentioned || isPrivateRoom) { ... }
+                else { ... activeCharNames = await checkShouldRespondAI(...) }
+                */
 
-                // กรองเฉพาะตัวละครที่จะตอบ (เพื่อลด Token และความสับสน) เมี๊ยว🐾
-                const filteredProfiles = characterProfiles.filter(p =>
-                    activeCharNames.some(name => name.trim().toLowerCase() === p.name.toLowerCase())
-                );
+
+                // กรองเฉพาะตัวละครที่จะตอบ (ในที่นี้คือทั้งหมดในห้อง) เมี๊ยว🐾
+                const filteredProfiles = characterProfiles;
                 // --------------------------
 
                 // 5. ดึงข้อมูลการแนะนำตัว (Introductions)

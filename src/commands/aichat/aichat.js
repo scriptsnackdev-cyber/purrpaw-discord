@@ -342,7 +342,7 @@ module.exports = {
             const historyData = Array.from(history.values()).reverse();
 
             // นำเข้า Logic การสร้าง System Prompt และ Messages (เลียนแบบจาก messageCreate.js)
-            const { getChatAI } = require('../../utils/openRouter');
+            const { getChatAI } = require('../../utils/aiProvider');
             const { getGuildData } = require('../../utils/guildCache');
             const { settings } = await getGuildData(guildId);
 
