@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType, MessageFlags } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const { invalidateCache } = require('../../utils/guildCache');
+const globalAIQueue = require('../../utils/aiQueue');
 
 let globalCharsCache = null;
 let globalCharsCacheTime = 0;
@@ -437,7 +438,7 @@ ${usersContextXml}`;
             });
 
             // เรียก AI
-            const aiResponse = await getChatAI(messagesForAI);
+            const aiResponse = await globalAIQueue.run(() => getChatAI(messagesForAI));
             
             // Parse XML
             const dialogueRegex = /<dialogue>([\s\S]*?)<\/dialogue>/i;

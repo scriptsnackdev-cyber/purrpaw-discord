@@ -1,6 +1,7 @@
 const supabase = require('../supabaseClient');
 const { getChatAI } = require('./openRouter');
 const { generateRPGImage } = require('./rpgImage');
+const globalAIQueue = require('./aiQueue');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 async function startRPGGame(interaction, channelId, userId) {
@@ -51,7 +52,7 @@ async function startRPGGame(interaction, channelId, userId) {
 3. ต้องระบุชัดเจนในส่วนของ <story> ว่าผู้เล่นแต่ละคนทำอะไรและเกิดผลอย่างไรตามที่เขาเลือกมา
 4. ภาษาไทยที่สุ่มละสลวย มีเสน่ห์แบบนิยายญี่ปุ่นเมี๊ยว!`;
 
-    const aiResponse = await getChatAI([{ role: 'system', content: systemPrompt }, { role: 'user', content: 'เริ่มการผจญภัย!' }]);
+    const aiResponse = await globalAIQueue.run(() => getChatAI([{ role: 'system', content: systemPrompt }, { role: 'user', content: 'เริ่มการผจญภัย!' }]));
     
     const { story, goal, buttons } = parseXMLResponse(aiResponse, session.id);
 
@@ -175,7 +176,7 @@ async function processNextRound(interaction, session, actions) {
 
     storyLog.push({ role: 'user', content: `ทุกคนตัดสินใจแล้วในรอบนี้:\n${playerActionsSummary}${goalContext}\n\nจงบรรยายบทถัดไปและให้ทางเลือกใหม่โดยใช้รูปแบบ XML Tags (<story>, <choice_a-c>) เท่านั้นเมี๊ยว!` });
 
-    const aiResponse = await getChatAI(storyLog);
+    const aiResponse = await globalAIQueue.run(() => getChatAI(storyLog));
     const { story, buttons } = parseXMLResponse(aiResponse, session.id);
 
     storyLog.push({ role: 'assistant', content: story });
@@ -212,7 +213,7 @@ async function endRPGGame(interaction, session) {
         { role: 'user', content: 'การผจญภัยต้องจบลงเพียงเท่านี้ จงสรุปเหตุการณ์ทั้งหมดที่เกิดขึ้นมาอย่างน่าประทับใจและปิดตำนานนี้ในแท็ก <story> เท่านั้นเมี๊ยว!' }
     ];
     
-    const aiResponse = await getChatAI(summaryPrompt);
+    const aiResponse = await globalAIQueue.run(() => getChatAI(summaryPrompt));
     const { story } = parseXMLResponse(aiResponse, session.id);
     
     await supabase.from('rpg_sessions').update({ status: 'ended' }).eq('id', session.id);

@@ -69,7 +69,12 @@ async function getChatAI(messages, signal = null) {
         if (error.name === 'AbortError' || error.name === 'CanceledError') {
             return null;
         }
-        console.error('Chat AI Error:', error.response?.data || error.message);
+        const errorDetail = error.response?.data?.error?.message || error.response?.data || error.message;
+        console.error(`[OpenRouter] Chat AI Error (${model}):`, errorDetail);
+        
+        if (error.response?.status === 429) {
+            return "🐾 *แงงง คนใช้เยอะมากจนแมวตอบไม่ทันแล้วเมี๊ยววว* (Rate Limit)";
+        }
         return "🐾 *แมวตัวนั้นดูเหมือนจะหลับปุ๋ยไปแล้วเมี๊ยว...* (OpenRouter Error)";
     }
 }
@@ -137,7 +142,8 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
         return activeBots.length > 0 ? activeBots : null;
     } catch (error) {
         if (error.name === 'AbortError' || error.name === 'CanceledError') return null;
-        console.error('CheckShouldRespond Error:', error.message);
+        const errorDetail = error.response?.data?.error?.message || error.response?.data || error.message;
+        console.error(`[OpenRouter] Pre-check Error (${model}):`, errorDetail);
         return null; 
     }
 }

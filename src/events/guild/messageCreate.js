@@ -3,6 +3,7 @@ const { getGuildData } = require('../../utils/guildCache');
 const supabase = require('../../supabaseClient');
 const { getChatAI, checkShouldRespondAI } = require('../../utils/openRouter');
 const { searchGif } = require('../../utils/tenor');
+const globalAIQueue = require('../../utils/aiQueue');
 
 module.exports = {
     name: Events.MessageCreate,
@@ -209,11 +210,7 @@ module.exports = {
             queueState.abortController = new AbortController();
             const signal = queueState.abortController.signal;
 
-            // 🚀 แจ้ง Typing เป็นระยะๆ ระหว่างรอ AI เมี๊ยว🐾
-            const typingInterval = setInterval(() => {
-                const latestMsg = queueState?.lastMessage || message;
-                latestMsg.channel.sendTyping().catch(() => {});
-            }, 5000);
+            let typingInterval = null;
 
             try {
                 // ใช้ Context จาก Message ล่าสุดในคิวเสมอเมี๊ยว🐾
@@ -305,12 +302,21 @@ module.exports = {
                         return uObj ? uObj.username : id;
                     }).join(', ');
 
-                    activeCharNames = await checkShouldRespondAI(recentHistory, botNamesList, userNamesList, signal);
+                    activeCharNames = await globalAIQueue.run(() => checkShouldRespondAI(recentHistory, botNamesList, userNamesList, signal));
+                    if (!activeCharNames) {
+                        console.log(`[AI Info] AI1 (checkShouldRespondAI) decided not to respond or encountered an error for channel ${message.channelId}`);
+                    }
                 }
 
                 if (!activeCharNames || activeCharNames.length === 0) {
                     return; // ยกเลิกการประมวลผลเพราะไม่มี AI ตัวไหนอยากตอบเมี๊ยว🐾
                 }
+
+                // 🚀 เริ่มแจ้ง Typing เมื่อ AI ตกลงว่าจะตอบแล้วเมี๊ยว🐾
+                await latestMsg.channel.sendTyping().catch(() => {});
+                typingInterval = setInterval(() => {
+                    latestMsg.channel.sendTyping().catch(() => {});
+                }, 5000);
 
                 // กรองเฉพาะตัวละครที่จะตอบ (เพื่อลด Token และความสับสน) เมี๊ยว🐾
                 const filteredProfiles = characterProfiles.filter(p =>
@@ -349,13 +355,29 @@ module.exports = {
                         const now = Date.now();
 
                         let intros;
+                        let needsFetch = false;
+
                         if (cached && (now - cached.timestamp < 300000)) { // Cache 5 นาทีเมี๊ยว🐾
                             intros = cached.data;
+                            // ⭐ ตรวจสอบว่ามีผู้ใช้ใหม่ที่ไม่ได้อยู่ใน Cache หรือไม่
+                            for (const uId of activeUserIds) {
+                                if (uId === 'superdupermeow_') continue;
+                                const hasIntro = intros.some(m => m.author.id === uId);
+                                if (!hasIntro) {
+                                    needsFetch = true;
+                                    break;
+                                }
+                            }
                         } else {
+                            needsFetch = true;
+                        }
+
+                        if (needsFetch) {
                             const ch = await message.guild.channels.fetch(channelId).catch(() => null);
                             if (ch && ch.isTextBased()) {
                                 intros = await ch.messages.fetch({ limit: 100 });
                                 message.client.introCache.set(cacheKey, { data: intros, timestamp: now });
+                                console.log(`[Intro Cache] Refreshed for channel ${channelId} (New user or TTL) 🐾`);
                             }
                         }
 
@@ -501,7 +523,11 @@ ${roomStatusXml}`;
                 // 8. เรียก AI
                 await message.channel.sendTyping();
 
-                let aiResponse = await getChatAI(messagesForAI, signal);
+                let aiResponse = await globalAIQueue.run(() => getChatAI(messagesForAI, signal));
+                
+                if (!aiResponse || aiResponse.includes("OpenRouter Error")) {
+                    console.error(`[AI Error] AI2 (getChatAI) failed or returned error message for channel ${message.channelId}`);
+                }
 
                 // 9. แยกแยะและประมวลผล XML Responses (Design v2)
                 if (!aiResponse || typeof aiResponse !== 'string') return;
@@ -596,7 +622,7 @@ ${roomStatusXml}`;
                     console.error('Real AI Error:', err);
                 }
             } finally {
-                clearInterval(typingInterval);
+                if (typingInterval) clearInterval(typingInterval);
                 queueState.isProcessing = false;
                 // ถ้ามีข้อความค้างอยู่ให้รันต่อเมี๊ยว🐾
                 if (queueState.hasPendingMessages) {
@@ -616,8 +642,6 @@ ${roomStatusXml}`;
         if (queueState.timer) {
             clearTimeout(queueState.timer);
         }
-
-        message.channel.sendTyping().catch(() => { });
 
         if (timeSinceFirstMessage >= 7000) {
             runAILogic().catch(console.error);
