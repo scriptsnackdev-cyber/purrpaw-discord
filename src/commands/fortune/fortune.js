@@ -171,7 +171,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('fortune')
         .setDescription('🔮 ดูดวงชะตารายวันด้วยไพ่ทาโร่เมี๊ยว')
-        .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages)
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(sub =>
             sub.setName('enable')
                 .setDescription('✨ เปิดใช้งานระบบสับไพ่ในห้องนี้ (Admin เท่านั้นเมี๊ยว)'))
@@ -377,3 +377,5 @@ async function drawCard(interaction) {
 }
 
 module.exports.drawCard = drawCard;
+
+

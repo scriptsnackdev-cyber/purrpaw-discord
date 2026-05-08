@@ -9,7 +9,7 @@ const axios = require('axios');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('tts')
+        .setName('tts').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('🎙️ ระบบแจ้งเตือนด้วยเสียง (Text-to-Speech) เมี๊ยว🐾')
 
         // ── เพิ่มบอท TTS เข้าห้องเสียง ──
@@ -314,3 +314,5 @@ module.exports = {
 
     },
 };
+
+

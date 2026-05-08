@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, AttachmentBuilder, PermissionFlagsBits } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
@@ -8,7 +8,7 @@ const { fontStack, fontStackBold } = require('../../utils/fontHelper');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('profile')
+        .setName('profile').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('🐱 ดูบัตรประจำตัวแมวของคุณ (รวมข้อมูลทุกอย่างในภาพเดียว) 🐾')
         .addUserOption(option => option.setName('user').setDescription('เลือกคนที่ต้องการดูโปรไฟล์')),
 
@@ -182,3 +182,5 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
     ctx.closePath();
     ctx.fill();
 }
+
+

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, AttachmentBuilder, PermissionFlagsBits } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const { RankCardBuilder, Font } = require('canvacord');
 const path = require('path');
@@ -9,7 +9,7 @@ Font.loadDefault();
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('scoreboard')
+        .setName('scoreboard').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('📊 ดูการ์ดสะสมคะแนนเลเวลและอันดับการแชทเมี๊ยว🐾')
         .addUserOption(option => option.setName('user').setDescription('เลือกคนที่ต้องการดูคะแนน')),
 
@@ -79,3 +79,5 @@ module.exports = {
         }
     }
 };
+
+

@@ -20,7 +20,7 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('toptier')
+        .setName('toptier').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('🏆 ดูอันดับสุดยอดผู้ใช้งาน (Top Tier) ของเซิร์ฟเวอร์เมี๊ยว🐾')
         .addSubcommand(subcommand =>
             subcommand.setName('view')
@@ -256,3 +256,5 @@ module.exports = {
         }
     }
 };
+
+

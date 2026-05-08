@@ -1,11 +1,11 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, PermissionFlagsBits } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const axios = require('axios');
 const { Readable } = require('stream');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('speak-voice')
+        .setName('speak-voice').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('🎙️ ส่งข้อความเสียงในนามตัวละคร AI เมี๊ยว🐾')
         .addStringOption(opt => 
             opt.setName('character')
@@ -194,3 +194,5 @@ module.exports = {
         }
     }
 };
+
+

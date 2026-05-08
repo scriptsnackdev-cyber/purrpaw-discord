@@ -3,7 +3,7 @@ const supabase = require('../../supabaseClient');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('private')
+        .setName('private').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('จัดการห้องส่วนตัวเมี๊ยว🐾')
         .addSubcommand(sub =>
             sub.setName('create-form')
@@ -180,3 +180,5 @@ module.exports = {
         }
     }
 };
+
+

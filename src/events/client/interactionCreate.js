@@ -42,13 +42,27 @@ module.exports = {
 
             const { features, settings } = await getGuildData(interaction.guild.id);
 
+            // 🚫 1.5 ตรวจสอบสถานะการถูกแบน (ป้องกันคนโดนแบนกดรับยศเพื่อข้ามกฎเมี๊ยว🐾)
+            if (settings.ban_role_id && interaction.member.roles.cache.has(settings.ban_role_id)) {
+                const blockedIds = ['assign_role:', 'verify_member:', 'form_submit:'];
+                const isBlockedButtonOrModal = (interaction.isButton() || interaction.isModalSubmit()) && blockedIds.some(id => interaction.customId.startsWith(id));
+                const isBlockedCommand = interaction.isChatInputCommand() && ['giverole', 'autoroles', 'rolebuttons'].includes(interaction.commandName);
+                
+                if (isBlockedButtonOrModal || isBlockedCommand) {
+                    return interaction.reply({ 
+                        content: '❌ **คุณถูกระงับการใช้งานชั่วคราวเมี๊ยว!** ไม่สามารถรับยศหรือทำรายการนี้ได้จนกว่าจะพ้นโทษนะเมี๊ยวว🐾', 
+                        flags: [MessageFlags.Ephemeral] 
+                    }).catch(() => {});
+                }
+            }
+
             // 💾 1. จัดการกรณีเป็น Slash Command
             if (interaction.isChatInputCommand()) {
                 const command = interaction.client.commands.get(interaction.commandName);
                 if (!command) return;
 
                 // 🛡️ เช็คสิทธิ์การใช้งานคำสั่ง (Admin/Everyone) เมี๊ยว🐾
-                if (!checkPermission(interaction, interaction.commandName)) {
+                if (!(await checkPermission(interaction, interaction.commandName))) {
                     return interaction.reply({ 
                         content: '❌ คุณไม่มีสิทธิ์ใช้งานคำสั่งนี้เมี๊ยว! (เฉพาะผู้ดูแลระบบหรือผู้ที่มีสิทธิ์เท่านั้น🐾)', 
                         flags: [MessageFlags.Ephemeral] 
@@ -629,6 +643,29 @@ module.exports = {
                 return interaction.update({ content: '❌ ยกเลิกการส่งข้อความแล้วเมี๊ยว!🐾', embeds: [], components: [] });
             }
 
+            else if (customId.startsWith('ai_speak_edit:')) {
+                const originalId = customId.split(':')[1];
+                const cached = interaction.client.aiSpeakCache?.get(originalId);
+
+                if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+
+                const modal = new ModalBuilder()
+                    .setCustomId(`ai_speak_save:${originalId}`)
+                    .setTitle('📝 แก้ไขข้อความ AI');
+
+                const textInput = new TextInputBuilder()
+                    .setCustomId('new_content')
+                    .setLabel('ข้อความที่คุณต้องการแก้ไข')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setValue(cached.content)
+                    .setRequired(true);
+
+                const row = new ActionRowBuilder().addComponents(textInput);
+                modal.addComponents(row);
+
+                return await interaction.showModal(modal);
+            }
+
             // --- ปุ่มลบฟอร์มปกติ (แอดมินเท่านั้น) ---
             else if (customId.startsWith('form_delete:')) {
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -993,6 +1030,34 @@ module.exports = {
         // 📝 3. จัดการกรณีเป็น Modal Submit
         else if (interaction.isModalSubmit()) {
             const { customId, guild, user, fields } = interaction;
+
+            // --- AI Speak: Save Edited Content ---
+            if (customId.startsWith('ai_speak_save:')) {
+                const originalId = customId.split(':')[1];
+                const newContent = fields.getTextInputValue('new_content');
+                const cached = interaction.client.aiSpeakCache?.get(originalId);
+
+                if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+
+                // อัปเดต Cache ด้วยข้อความใหม่เมี๊ยว🐾
+                cached.content = newContent;
+                interaction.client.aiSpeakCache.set(originalId, cached);
+
+                // สร้าง Embed ใหม่ที่อัปเดตแล้ว
+                const updatedEmbed = new EmbedBuilder()
+                    .setAuthor({ name: cached.charName, iconURL: cached.charAvatar || null })
+                    .setDescription(newContent)
+                    .setColor(0x8B5CF6)
+                    .setFooter({ text: 'แก้ไขเรียบร้อย! คุณต้องการส่งข้อความนี้ไหมเมี๊ยว?🐾' });
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`ai_speak_approve:${originalId}`).setLabel('Approve').setStyle(ButtonStyle.Success).setEmoji('✅'),
+                    new ButtonBuilder().setCustomId(`ai_speak_edit:${originalId}`).setLabel('Edit').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
+                    new ButtonBuilder().setCustomId(`ai_speak_reject:${originalId}`).setLabel('Reject').setStyle(ButtonStyle.Danger).setEmoji('❌')
+                );
+
+                return await interaction.update({ embeds: [updatedEmbed], components: [row] });
+            }
 
             // --- ขึ้นเพลงมาคิวแรกผ่าน Queue Modal ---
             if (customId === 'music_queue_jump') {

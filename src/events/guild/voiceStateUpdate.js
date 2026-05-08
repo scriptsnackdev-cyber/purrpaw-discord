@@ -8,6 +8,10 @@ module.exports = {
         const guild = oldState.guild || newState.guild;
         const member = oldState.member || newState.member;
         if (!member || member.user.bot) return;
+        
+        // 🚫 เช็คว่าโดนแบนอยู่ไหม (ถ้าโดนแบนจะไม่นับเวลาห้องเสียงเมี๊ยว🐾)
+        const { settings } = await getGuildData(guild.id);
+        if (settings.ban_role_id && member.roles.cache.has(settings.ban_role_id)) return;
 
         // --- ⚡ ระบบสะสมเวลาห้องเสียง (Voice Leveling) ---
         if (!guild.client.voiceSessions) guild.client.voiceSessions = new Map();

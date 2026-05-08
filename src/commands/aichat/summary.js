@@ -1,9 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { getSummaryAI } = require('../../utils/aiProvider');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('summary')
+        .setName('summary').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('📋 สรุปความเคลื่อนไหวในห้องนี้ 20 ข้อความล่าสุดเมี๊ยว!'),
 
     async execute(interaction) {
@@ -48,3 +48,5 @@ module.exports = {
         }
     },
 };
+
+

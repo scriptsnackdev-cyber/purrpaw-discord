@@ -1,36 +1,5 @@
 {
-    "adminRoles": ["Administrator", "Moderator"],
+    "adminRoles": ["Administrator"],
     "adminUsers": [],
-    "commands": {
-        "setup": "admin",
-        "initial": "admin",
-        "rolebuttons": "admin",
-        "autoroles": "admin",
-        "welcome": "admin",
-        "goodbye": "admin",
-        "leveling": "admin",
-        "form": "admin",
-        "ticket": "admin",
-        "send": "admin",
-        "purrpaw": "admin",
-        "speak": "admin",
-        "speakVoice": "admin",
-        "giverole": "admin",
-        "addset": "admin",
-        "daily": "admin",
-        "aichat": "admin",
-        "summary": "admin",
-        "fortune": "admin",
-        "mbti": "admin",
-        "sbti": "admin",
-        "rpg": "admin",
-        "private": "admin",
-        "setbg": "admin",
-        "toptier": "admin",
-        "profile": "everyone",
-        "music": "everyone",
-        "tts": "everyone",
-        "scoreboard": "everyone",
-        "ping": "everyone"
-    }
+    "commands": {}
 }

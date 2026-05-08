@@ -4,7 +4,7 @@ const { generateRPGImage } = require('../../utils/rpgImage');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('rpg')
+        .setName('rpg').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('⚔️ เริ่มต้นการผจญภัยสวมบทบาท (RPG) กับเพื่อนๆ เมี๊ยว🐾')
         .addSubcommand(sub =>
             sub.setName('start')
@@ -128,3 +128,5 @@ module.exports = {
         }
     }
 };
+
+

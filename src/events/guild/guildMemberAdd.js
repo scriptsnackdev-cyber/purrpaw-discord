@@ -15,6 +15,29 @@ module.exports = {
 
         // ── จัดการแจก Role อัตโนมัติ (Auto-Role) ──
         try {
+            // 🛡️ 1.5 เช็คก่อนว่าคนนี้ติดแบนอยู่ไหมเมี๊ยว🐾
+            const { data: activeBan } = await supabase
+                .from('guild_bans')
+                .select('*')
+                .eq('guild_id', guild.id)
+                .eq('user_id', member.id)
+                .gt('ends_at', new Date().toISOString())
+                .eq('is_processed', false)
+                .single();
+
+            if (activeBan) {
+                const banRoleId = guildData?.settings?.ban_role_id;
+                if (banRoleId) {
+                    const banRole = guild.roles.cache.get(banRoleId) || await guild.roles.fetch(banRoleId).catch(() => null);
+                    if (banRole) {
+                        await member.roles.add(banRole, 'User rejoined while banned 🐾');
+                        console.log(`[Join] Re-applied ban role to ${member.user.tag}`);
+                        return; // ⛔ ข้ามขั้นตอนอื่นๆ ไปเรยเมี๊ยว🐾 (ไม่ต้องแจก Welcome/Auto-Role)
+                    }
+                }
+            }
+
+            // 2. ถ้าไม่ติดแบน ค่อยแจก Auto-Role ปกติเมี๊ยว
             const { data: autoRoleData } = await supabase
                 .from('auto_roles')
                 .select('role_id')
@@ -28,7 +51,7 @@ module.exports = {
                 }
             }
         } catch (e) {
-            console.error('AutoRole fetch error:', e.message);
+            console.error('AutoRole/BanCheck error:', e.message);
         }
 
         const welcomeSettings = guildData?.settings?.welcome;

@@ -1,8 +1,8 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('purrpaw')
+        .setName('purrpaw').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('🐾 คำสั่งรวมพลังของแก๊งเหมียว')
         .addSubcommand(sub => 
             sub.setName('leave')
@@ -83,3 +83,5 @@ module.exports = {
         }
     },
 };
+
+

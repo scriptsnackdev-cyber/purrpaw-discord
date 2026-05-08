@@ -11,7 +11,7 @@ module.exports = {
                 .setDescription('ลิงก์รูปภาพที่ต้องการใช้ (หรือพิมพ์ "default" เพื่อกลับไปใช้รูปเดิม)')
                 .setRequired(true)
         )
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
         await interaction.deferReply();
@@ -71,3 +71,5 @@ module.exports = {
         }
     }
 };
+
+

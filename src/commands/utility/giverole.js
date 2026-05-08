@@ -15,7 +15,7 @@ module.exports = {
                 .setDescription('ชื่อยศหรือ ID ยศ (ถ้าไม่มีจะสร้างให้ใหม่เมี๊ยว🐾)')
                 .setAutocomplete(true)
                 .setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
         await interaction.deferReply();
@@ -91,3 +91,5 @@ module.exports = {
         );
     }
 };
+
+

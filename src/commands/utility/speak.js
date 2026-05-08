@@ -14,9 +14,6 @@ module.exports = {
             option.setName('message')
                 .setDescription('ข้อความที่ต้องการให้พูดเมี๊ยว')
                 .setRequired(true))
-        .addStringOption(option => 
-            option.setName('avatar')
-                .setDescription('URL รูปโปรไฟล์ (ถ้าเลือก AI Character ระบบจะใช้รูปของ AI ตัวนั้นเมี๊ยว)'))
         .addAttachmentOption(option => 
             option.setName('image')
                 .setDescription('รูปภาพที่ต้องการส่งเมี๊ยว (เลือกจากในเครื่องได้เลยเมี๊ยว)'))
@@ -28,9 +25,10 @@ module.exports = {
 
         const { data: chars } = await supabase
             .from('ai_characters')
-            .select('id, name')
+            .select('id, name, called_at')
             .eq('guild_id', guildId)
             .ilike('name', `%${focusedValue}%`)
+            .order('called_at', { ascending: false }) // เรียงตามที่ใช้ล่าสุดเมี๊ยว🐾
             .limit(25);
 
         if (!chars) return interaction.respond([]);
@@ -43,7 +41,6 @@ module.exports = {
     async execute(interaction) {
         const charInput = interaction.options.getString('character');
         const message = interaction.options.getString('message');
-        const manualAvatar = interaction.options.getString('avatar');
         const attachment = interaction.options.getAttachment('image');
         const guildId = interaction.guild.id;
 
@@ -51,7 +48,7 @@ module.exports = {
 
         try {
             let finalName = charInput;
-            let finalAvatar = manualAvatar;
+            let finalAvatar = interaction.client.user.displayAvatarURL(); // 🐾 ใช้รูป PurrPaw เป็นค่าเริ่มต้น
 
             // 1. ตรวจสอบว่า character ที่เลือกเป็น ID ของ AI ใน Database หรือไม่
             const { data: charData } = await supabase
@@ -63,7 +60,10 @@ module.exports = {
 
             if (charData) {
                 finalName = charData.name;
-                finalAvatar = charData.image_url || manualAvatar;
+                if (charData.image_url) finalAvatar = charData.image_url;
+
+                // 🕒 อัปเดตเวลาที่ถูกเรียกใช้ล่าสุดเมี๊ยว🐾
+                await supabase.from('ai_characters').update({ called_at: new Date().toISOString() }).eq('id', charInput);
             }
 
             // 2. ตรวจสอบว่ามี Webhook ในห้องนี้หรือยัง
@@ -94,3 +94,5 @@ module.exports = {
         }
     },
 };
+
+

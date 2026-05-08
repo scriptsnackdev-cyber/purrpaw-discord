@@ -1,49 +1,70 @@
+const { getGuildData } = require('./guildCache');
 const fs = require('fs');
 const path = require('path');
 
+// Fallback Default Config (กรณีใน Supabase ยังไม่มีการตั้งค่าเมี๊ยว🐾)
+const localConfigPath = path.join(__dirname, '../../config/permissions.json');
+let localConfig = { adminRoles: ["Administrator"], adminUsers: [], commands: {} };
+try {
+    localConfig = JSON.parse(fs.readFileSync(localConfigPath, 'utf8'));
+} catch (e) {}
+
 /**
- * Permission Manager Utility
- * จัดการสิทธิ์การใช้งานคำสั่งผ่าน JSON เมี๊ยว🐾
+ * Permission Manager Utility (Supabase Version 🐾)
+ * จัดการสิทธิ์การใช้งานคำสั่งผ่าน Supabase และ Cache เมี๊ยว
  */
 
-const configPath = path.join(__dirname, '../../config/permissions.json');
-
-function getPermissions() {
+async function checkPermission(interaction, commandName) {
+    const { settings } = await getGuildData(interaction.guild.id);
+    
+    // ดึงค่าสิทธิ์จาก Supabase
+    const permissions = settings.permissions || localConfig;
+    
+    // ดึงชื่อ Subcommand (ถ้ามี) เมี๊ยว🐾
+    let subcommandName = null;
     try {
-        const data = fs.readFileSync(configPath, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        console.error('Error loading permissions.json:', error);
-        // Fallback default
-        return { adminRoles: ["Administrator"], adminUsers: [], commands: {} };
-    }
-}
+        subcommandName = interaction.options.getSubcommand(false);
+    } catch (e) {}
 
-function checkPermission(interaction, commandName) {
-    const config = getPermissions();
-    const requiredLevel = config.commands[commandName] || 'everyone';
+    // ลำดับการเช็ค: 1. command:subcommand -> 2. command -> 3. admin (default)
+    const fullKey = subcommandName ? `${commandName}:${subcommandName}` : commandName;
+    const requiredLevel = permissions.commands?.[fullKey] || 
+                          permissions.commands?.[commandName] || 
+                          localConfig.commands?.[fullKey] ||
+                          localConfig.commands?.[commandName] || 
+                          'admin';
 
-    // ถ้าใครๆ ก็ใช้ได้ ก็ปล่อยผ่านเลยเมี๊ยว🐾
+    // 🛡️ เช็คสิทธิ์สูงสุด (Administrator หรือ ID พิเศษ) -> เป็น Admin เมี๊ยว🐾
+    const isAdmin = interaction.member.permissions.has('Administrator') || 
+                    (permissions.adminUsers || localConfig.adminUsers || []).includes(interaction.user.id);
+
+    // 1. ถ้าใครๆ ก็ใช้ได้ ก็ปล่อยผ่านเลยเมี๊ยว🐾
     if (requiredLevel === 'everyone') return true;
 
-    // เช็คสิทธิ์ Admin
-    if (requiredLevel === 'admin') {
-        // 1. เช็คจาก ID ผู้ใช้ (ถ้ามีระบุในไฟล์)
-        if (config.adminUsers.includes(interaction.user.id)) return true;
+    // 2. ถ้าเป็น Admin อยู่แล้ว ให้ผ่านทุกด่านเมี๊ยว🐾
+    if (isAdmin) return true;
 
-        // 2. เช็คจากสิทธิ์ Administrator ของ Discord
-        if (interaction.member.permissions.has('Administrator')) return true;
+    // 3. ถ้าเป็นระดับ Admin แต่ผู้ใช้ไม่ใช่ Admin -> ปัดตกเมี๊ยว
+    if (requiredLevel === 'admin' && !isAdmin) return false;
 
-        // 3. เช็คจากชื่อ Role ที่ระบุไว้
-        const hasAdminRole = interaction.member.roles.cache.some(role => 
-            config.adminRoles.includes(role.name)
+    // 4. ถ้าเป็นระดับ Mod (หรือระบุชื่อ Role โดยตรง)
+    const modRoles = permissions.mod_roles || [];
+    
+    // เช็คกรณีระบุเป็นชื่อ Role หรือ ID โดยตรงใน JSON
+    if (Array.isArray(requiredLevel)) {
+        return interaction.member.roles.cache.some(role => 
+            requiredLevel.includes(role.id) || requiredLevel.includes(role.name)
         );
-        if (hasAdminRole) return true;
-
-        return false;
     }
 
-    return true;
+    // เช็คกรณีต้องการระดับ Mod (ถ้ามี Role ใน mod_roles ก็ให้ผ่านเมี๊ยว🐾)
+    if (requiredLevel === 'mod') {
+        return interaction.member.roles.cache.some(role => 
+            modRoles.includes(role.id) || modRoles.includes(role.name)
+        );
+    }
+
+    return isAdmin; // Fallback
 }
 
 module.exports = { checkPermission };

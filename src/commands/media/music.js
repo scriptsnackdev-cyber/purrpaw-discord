@@ -3,7 +3,7 @@ const supabase = require('../../supabaseClient');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('music')
+        .setName('music').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setDescription('🎵 คำสั่งเครื่องเล่นเพลงของเจ้าเหมียว')
         
         // ── เล่นเพลง ──
@@ -551,3 +551,5 @@ function makeProgressBar(current, total, size = 20) {
     const bar = '▓'.repeat(filled) + '░'.repeat(size - filled);
     return `\`${fmt(current)}\` ${bar} \`${fmt(total)}\``;
 }
+
+

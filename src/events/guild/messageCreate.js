@@ -77,7 +77,7 @@ module.exports = {
         }
 
         // ── ⚡ ระบบสะสมคะแนนเลเวล (Leveling) ──
-        if (features.leveling !== false) {
+        if (features.leveling !== false && (!settings.ban_role_id || !message.member.roles.cache.has(settings.ban_role_id))) {
             if (!message.client.xpCooldowns) message.client.xpCooldowns = new Map();
             const cooldownKey = `${message.guild.id}-${message.author.id}`;
             const lastXP = message.client.xpCooldowns.get(cooldownKey) || 0;

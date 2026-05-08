@@ -271,6 +271,7 @@ if (fs.existsSync(handlersPath)) {
 // ── ระบบจัดการ AI Chat Cleanup & Private Room Cleanup ──
 const { cleanupExpiredSessions } = require('./utils/aiCleanup');
 const { cleanupPrivateRooms, warnPrivateRooms } = require('./utils/privateRoomCleanup');
+const { cleanupExpiredBans } = require('./utils/banManager');
 
 const { REST, Routes } = require('discord.js');
 
@@ -295,22 +296,22 @@ client.once('clientReady', async () => {
 
     console.log(`✅ บอทออนไลน์แล้วเมี๊ยว: ${client.user.tag}`);
     
-    // 🚀 ระบบอัปเดตคำสั่งอัตโนมัติราย Guild เมี๊ยว🐾
+    // 🚀 ระบบอัปเดตคำสั่งอัตโนมัติเมี๊ยว🐾
     try {
+        const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+        const commandsJSON = Array.from(client.commands.values()).map(c => c.data.toJSON());
+        
+        // 1. อัปเดต Guild Commands ให้กับทุกเซิร์ฟเวอร์ที่อยู่ใน DB (เพื่อให้ผลทันทีและไม่ซ้อนกับ Global เมี๊ยว🐾)
         const { data: allGuilds } = await supabase.from('guilds').select('id');
         if (allGuilds && allGuilds.length > 0) {
-            const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-            const commandsJSON = Array.from(client.commands.values()).map(c => c.data.toJSON());
-            
-            console.log(`📡 กำลังอัปเดตคำสั่งให้ ${allGuilds.length} เซิร์ฟเวอร์... 🐾`);
-            
+            console.log(`📡 กำลังอัปเดต Guild Commands ให้ ${allGuilds.length} เซิร์ฟเวอร์...`);
             for (const g of allGuilds) {
                 await rest.put(
-                    Routes.applicationGuildCommands(process.env.CLIENT_ID, g.id),
+                    Routes.applicationGuildCommands(client.user.id, g.id),
                     { body: commandsJSON }
-                ).catch(err => console.error(`[Deploy] Failed for Guild ${g.id}:`, err.message));
+                ).catch(err => {});
             }
-            console.log('✅ อัปเดตคำสั่งทุกเซิร์ฟเวอร์เรียบร้อยแล้วเมี๊ยวว! ✨');
+            console.log('✅ อัปเดต Guild Commands ทุกเซิร์ฟเวอร์เรียบร้อยแล้วเมี๊ยวว! ✨');
         }
     } catch (err) {
         console.error('[Deploy] Error:', err);
@@ -321,12 +322,14 @@ client.once('clientReady', async () => {
         cleanupExpiredSessions(client);
         cleanupPrivateRooms(client);
         warnPrivateRooms(client);
+        cleanupExpiredBans(client);
     }, 1000 * 60);
     
     // รันทันทีหนึ่งรอบตอนเปิดบอทเมี๊ยว🐾
     cleanupExpiredSessions(client);
     cleanupPrivateRooms(client);
     warnPrivateRooms(client);
+    cleanupExpiredBans(client);
 
     // เริ่มทำงาน Daily Scheduler เมี๊ยว🐾
     initDailyScheduler(client);

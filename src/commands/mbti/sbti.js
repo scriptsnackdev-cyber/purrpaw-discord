@@ -10,7 +10,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('sbti')
         .setDescription('🐾 แบบทดสอบ SBTI: ค้นหาตัวตนในแบบ PurrPaw')
-        .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages)
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(sub =>
             sub.setName('enable')
                 .setDescription('✨ เปิดใช้งานปุ่มเริ่มทำแบบทดสอบ SBTI ในห้องนี้ (Admin เท่านั้นเมี๊ยว)'))
@@ -210,3 +210,5 @@ async function startTest(interaction) {
 }
 
 module.exports.startTest = startTest;
+
+
