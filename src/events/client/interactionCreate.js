@@ -718,6 +718,35 @@ module.exports = {
                 await interaction.showModal(modal);
             }
 
+            // --- Summary: Send/Cancel ---
+            else if (customId.startsWith('summary_send:')) {
+                const originalId = customId.split(':')[1];
+                const cached = interaction.client.summaryCache?.get(originalId);
+
+                if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+
+                await interaction.deferUpdate(); // 🚀 รับเรื่องทันทีป้องกัน Timeout เมี๊ยว🐾
+
+                const embed = new EmbedBuilder()
+                    .setTitle('📋 สรุปความเคลื่อนไหวในห้องนี้เมี๊ยวว! 🐾')
+                    .setDescription(cached.content)
+                    .setColor('#FFB6C1')
+                    .setThumbnail(interaction.client.user.displayAvatarURL())
+                    .setFooter({ text: `สรุปโดย PurrPaw AI (ย้อนหลัง ${cached.limit} ข้อความ) 🐈✨` })
+                    .setTimestamp();
+
+                await interaction.channel.send({ embeds: [embed] });
+                
+                interaction.client.summaryCache.delete(originalId);
+                return interaction.editReply({ content: '✅ ส่งสรุปเข้าห้องเรียบร้อยแล้วเมี๊ยวว!🐾', embeds: [], components: [] });
+            }
+
+            else if (customId.startsWith('summary_cancel:')) {
+                const originalId = customId.split(':')[1];
+                interaction.client.summaryCache?.delete(originalId);
+                return interaction.update({ content: '❌ ยกเลิกการส่งสรุปแล้วเมี๊ยว!🐾', embeds: [], components: [] });
+            }
+
             // --- [Ticket] ปุ่มเปลี่ยนสถานะ (สำหรับ Admin) ---
             else if (customId.startsWith('ticket_status:')) {
                 const [_, ticketId, newStatus] = customId.split(':');
