@@ -40,6 +40,11 @@ module.exports = {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
             }
 
+            // ⭐ สำหรับแบบฟอร์ม ให้ Defer ไว้ก่อนทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
+            if (interaction.isModalSubmit() && interaction.customId.startsWith('form_submit:')) {
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
+            }
+
             const { features, settings } = await getGuildData(interaction.guild.id);
 
             // 🚫 1.5 ตรวจสอบสถานะการถูกแบน (ป้องกันคนโดนแบนกดรับยศเพื่อข้ามกฎเมี๊ยว🐾)
@@ -1139,7 +1144,7 @@ module.exports = {
 
             // --- ส่งฟอร์มสมัคร ---
             else if (customId.startsWith('form_submit:')) {
-                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                // (Deferred at the beginning of interaction)
                 const formId = customId.split(':')[1];
                 
                 try {
