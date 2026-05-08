@@ -31,11 +31,16 @@ module.exports = {
             o.setName('persona')
                 .setDescription('เลือก AI ที่ต้องการให้ตอบเมี๊ยว🐾')
                 .setRequired(true)
-                .setAutocomplete(true)),
+                .setAutocomplete(true))
+        .addStringOption(o => 
+            o.setName('topic')
+                .setDescription('หัวข้อที่อยากให้พูดถึง (ไม่ระบุก็ได้เมี๊ยว🐾)')
+                .setRequired(false)),
 
     async execute(interaction) {
         const guildId = interaction.guild.id;
         const botId = interaction.options.getString('persona');
+        const topic = interaction.options.getString('topic');
 
         if (!interaction.deferred && !interaction.replied) {
             await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
@@ -129,6 +134,7 @@ You are playing as ${char.name}.
 
 [MULTI-CHARACTER RULES]
 - ตัวละครควรพูดสั้นๆ (50-100 ตัวอักษร) เพื่อความสมจริงเมี๊ยว🐾
+${topic ? `\n[PRIORITY TOPIC]\n- ให้เน้นพูดคุยเกี่ยวกับหัวข้อ: "${topic}" เป็นหลักในบทสนทนานี้เมี๊ยว🐾` : ''}
 </instructions>
 
 <characters>
