@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const { getSummaryAI } = require('../../utils/aiProvider');
 
 module.exports = {
@@ -38,16 +38,28 @@ module.exports = {
             // 3. ส่งให้ AI สรุป
             const summaryResult = await getSummaryAI(chatLog);
 
-            // 4. ส่งผลลัพธ์ในรูปแบบ Embed
+            // 4. เตรียมปุ่มยืนยัน
+            if (!interaction.client.summaryCache) interaction.client.summaryCache = new Map();
+            interaction.client.summaryCache.set(interaction.id, {
+                content: summaryResult,
+                limit: limit
+            });
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`summary_send:${interaction.id}`).setLabel('ส่งเข้าห้อง (Public)').setStyle(ButtonStyle.Success).setEmoji('✅'),
+                new ButtonBuilder().setCustomId(`summary_cancel:${interaction.id}`).setLabel('ยกเลิก').setStyle(ButtonStyle.Secondary).setEmoji('❌')
+            );
+
+            // 5. ส่งผลลัพธ์ในรูปแบบ Embed (พรีวิวคนเดียว)
             const embed = new EmbedBuilder()
-                .setTitle('📋 สรุปเหตุการณ์ที่ผ่านมาเมี๊ยวว! 🐾')
+                .setTitle('📋 พรีวิวสรุปเหตุการณ์เมี๊ยวว! 🐾')
                 .setDescription(summaryResult)
                 .setColor('#FFB6C1')
                 .setThumbnail(interaction.client.user.displayAvatarURL())
-                .setFooter({ text: `สรุปจาก ${limit} ข้อความล่าสุด 🐈✨`, iconURL: interaction.user.displayAvatarURL() })
+                .setFooter({ text: `สรุปจาก ${limit} ข้อความล่าสุด (พรีวิวเฉพาะคุณ) 🐈✨`, iconURL: interaction.user.displayAvatarURL() })
                 .setTimestamp();
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [embed], components: [row] });
 
         } catch (error) {
             console.error('Summary Command Error:', error);
