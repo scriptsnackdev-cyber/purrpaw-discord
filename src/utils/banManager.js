@@ -88,8 +88,24 @@ async function banUser(interaction, targetMember, minutes, reason) {
 
         if (dbError) throw dbError;
 
-        // 6. ถอดยศเดิมออกให้หมด และใส่ยศแบน
-        await targetMember.roles.set([banRole], `Banned for ${minutes}m: ${reason}`);
+        // 6. ถอดยศเดิมออก (ที่ถอดได้) และใส่ยศแบนเมี๊ยว🐾
+        // เราจะไม่ใช้ .set() เพราะจะติดเรื่องยศที่บอทจัดการไม่ได้ (เช่น ยศ Booster หรือยศที่ถูกคุมโดย Integration อื่น)
+        const rolesToRemove = targetMember.roles.cache.filter(role => 
+            role.name !== '@everyone' && 
+            !role.managed && 
+            role.position < botMember.roles.highest.position
+        );
+
+        try {
+            if (rolesToRemove.size > 0) {
+                await targetMember.roles.remove(rolesToRemove, `Banning: ${reason}`);
+            }
+            await targetMember.roles.add(banRole, `Banned for ${minutes}m: ${reason}`);
+        } catch (roleError) {
+            console.error('[BanManager] Role Manipulation Error:', roleError);
+            // ถ้าเฟลตรงนี้ อาจจะเป็นเพราะสิทธิ์ขัดกันจริงๆ
+            return interaction.editReply({ content: '❌ บอทไม่สามารถจัดการยศของสมาชิกคนนี้ได้เมี๊ยว🐾 แม้จะเช็คเบื้องต้นผ่านแล้ว โปรดตรวจสอบว่าบอทมีสิทธิ์ Administrator หรืออยู่สูงกว่าสมาชิกคนนี้จริงๆ นะ!' });
+        }
 
         // 7. ประกาศการลงโทษแบบนิรนาม (ส่งเข้าห้องโดยไม่ระบุชื่อคนแบน) เมี๊ยว🐾
         const banCard = await generateBanCard(targetMember.user, minutes, reason, guild);
@@ -143,12 +159,22 @@ async function cleanupExpiredBans(client) {
                     }
 
                     // คืนยศเดิม และเอายศแบนออก (กรองเฉพาะยศที่บอทจัดการได้)
-                    const rolesToSet = (ban.roles || []).filter(roleId => {
+                    const rolesToAdd = (ban.roles || []).filter(roleId => {
                         const role = guild.roles.cache.get(roleId);
-                        return role && role.position < botMember.roles.highest.position;
+                        return role && !role.managed && role.position < botMember.roles.highest.position;
                     });
                     
-                    await member.roles.set(rolesToSet, 'Ban expired - Restoring original roles 🐾');
+                    // เอายศแบนออก
+                    if (banRoleId && member.roles.cache.has(banRoleId)) {
+                        await member.roles.remove(banRoleId, 'Ban expired 🐾').catch(() => {});
+                    }
+
+                    // คืนยศเดิม
+                    if (rolesToAdd.length > 0) {
+                        await member.roles.add(rolesToAdd, 'Ban expired - Restoring original roles 🐾').catch(err => {
+                            console.error(`[BanManager] Failed to add roles to ${member.id}:`, err.message);
+                        });
+                    }
                     
                     // ส่ง DM บอกว่าพ้นโทษแล้วเมี๊ยว🐾
                     const unbanEmbed = new EmbedBuilder()
@@ -250,14 +276,30 @@ async function unbanUser(interaction, targetMember) {
             return interaction.editReply({ content: '❌ บอทไม่มีสิทธิ์ **Manage Roles** (จัดการยศ) เมี๊ยว🐾 โปรดให้สิทธิ์นี้กับบอทด้วยนะ!' });
         }
 
-        // 3. คืนยศเดิม (กรองเฉพาะยศที่บอทจัดการได้)
-        const rolesToSet = (banData.roles || []).filter(roleId => {
-            const role = guild.roles.cache.get(roleId);
-            // คืนเฉพาะยศที่มีอยู่จริง และอยู่ต่ำกว่ายศบอทเมี๊ยว🐾
-            return role && role.position < botMember.roles.highest.position;
-        });
+        // 3. คืนยศเดิม (ถอดยศแบนออกก่อน แล้วค่อยใส่ยศเดิมกลับ)
+        // ดึง Ban Role ID จาก Settings
+        const { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guildId).single();
+        const banRoleId = guildData?.settings?.ban_role_id;
 
-        await targetMember.roles.set(rolesToSet, `Manual Unban by ${interaction.user.tag} 🐾`);
+        try {
+            // เอายศแบนออก
+            if (banRoleId && targetMember.roles.cache.has(banRoleId)) {
+                await targetMember.roles.remove(banRoleId, `Unbanned by ${interaction.user.tag}`);
+            }
+
+            // คืนยศเดิม (กรองเฉพาะยศที่บอทจัดการได้)
+            const rolesToAdd = (banData.roles || []).filter(roleId => {
+                const role = guild.roles.cache.get(roleId);
+                return role && !role.managed && role.position < botMember.roles.highest.position;
+            });
+
+            if (rolesToAdd.length > 0) {
+                await targetMember.roles.add(rolesToAdd, `Manual Unban by ${interaction.user.tag} 🐾`);
+            }
+        } catch (roleError) {
+            console.error('[BanManager] Unban Role Error:', roleError);
+            return interaction.editReply({ content: '❌ เกิดข้อผิดพลาดขณะจัดการยศในการปลดแบนเมี๊ยว🐾 บอทอาจจะมีสิทธิ์ไม่พอที่จะคืนบางยศให้!' });
+        }
 
         // 4. อัปเดต DB
         await supabase.from('guild_bans').update({ is_processed: true }).eq('id', banData.id);
