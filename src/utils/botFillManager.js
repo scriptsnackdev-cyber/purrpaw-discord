@@ -204,7 +204,7 @@ async function generateQueueBoard(sessions, room1Queue, room2Queue) {
         await drawBackground(ctx, canvas.width, canvas.height, bgPath);
 
         // Overlay & Title
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; // ปรับให้เข้มขึ้นจาก 0.7 เป็น 0.8 เมี๊ยว🐾
         ctx.roundRect(30, 30, 940, 540, 30);
         ctx.fill();
 
@@ -255,20 +255,30 @@ async function generateQueueBoard(sessions, room1Queue, room2Queue) {
                 }
 
                 const charIds = qItem.character_ids.split(',').map(id => id.trim());
-                const { data: chars } = await supabase.from('ai_characters').select('image_url').in('id', charIds);
+                const { data: chars } = await supabase.from('ai_characters').select('name, image_url').in('id', charIds);
                 
                 if (chars) {
                     const size = 60;
                     for (let j = 0; j < chars.length; j++) {
-                        const img = await loadImage(chars[j].image_url).catch(() => null);
+                        const char = chars[j];
+                        const img = await loadImage(char.image_url).catch(() => null);
+                        const chatheadX = startX + (j * 75); // ขยับห่างกันนิดนึงเพื่อให้มีที่ใส่ชื่อ
+                        
                         if (img) {
                             ctx.save();
                             ctx.beginPath();
-                            ctx.arc(startX + (j * 70) + size/2, y + 30 + size/2, size/2, 0, Math.PI * 2);
+                            ctx.arc(chatheadX + size/2, y + 25 + size/2, size/2, 0, Math.PI * 2);
                             ctx.clip();
-                            ctx.drawImage(img, startX + (j * 70), y + 30, size, size);
+                            ctx.drawImage(img, chatheadX, y + 25, size, size);
                             ctx.restore();
                         }
+
+                        // วาดชื่อตัวละครตัวเล็กๆ ใต้รูปเมี๊ยว🐾
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = `14px ${fontStack}`;
+                        ctx.textAlign = 'center';
+                        const displayName = char.name.length > 8 ? char.name.substring(0, 7) + '..' : char.name;
+                        ctx.fillText(displayName, chatheadX + size/2, y + 25 + size + 15);
                     }
                 }
             };

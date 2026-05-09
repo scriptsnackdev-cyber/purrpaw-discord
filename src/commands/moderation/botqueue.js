@@ -143,13 +143,6 @@ module.exports = {
                     current = current.startOf('day');
                 }
 
-                while (sessions.length < count) {
-                    const day = current.day(); // 0=Sun, 1=Mon, 2=Tue...
-                    if ([2, 4, 6].includes(day)) {
-                        sessions.push(current.format('ddd DD/MM/YYYY'));
-                    }
-                    current = current.add(1, 'day');
-                }
                 return sessions;
             };
 
