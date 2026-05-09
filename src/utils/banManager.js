@@ -28,6 +28,21 @@ async function banUser(interaction, targetMember, minutes, reason) {
             return interaction.editReply({ content: '❌ ไม่พบยศแบนในเซิร์ฟเวอร์เมี๊ยว🐾 อาจจะถูกลบไปแล้ว ลองปิดแล้วเปิดระบบใหม่นะ!' });
         }
 
+        // 🛡️ 1.2 ตรวจสอบสิทธิ์ของบอทและลำดับยศ
+        const botMember = guild.members.me;
+        
+        // เช็คว่าบอทมีสิทธิ์จัดการยศไหม
+        if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+            return interaction.editReply({ content: '❌ บอทไม่มีสิทธิ์ **Manage Roles** (จัดการยศ) เมี๊ยว🐾 โปรดให้สิทธิ์นี้กับบอทด้วยนะ!' });
+        }
+
+        // เช็คว่ายศแบนอยู่สูงกว่าบอทไหม
+        if (banRole.position >= botMember.roles.highest.position) {
+            return interaction.editReply({ 
+                content: `❌ บอทไม่สามารถให้ยศ <@&${banRole.id}> ได้ เพราะยศนี้อยู่สูงกว่าหรือเท่ากับยศของบอทเมี๊ยว🐾\n**วิธีแก้:** โปรดลากยศของบอท (PurrPaw) ให้ไปอยู่เหนือยศ **${banRole.name}** ในการตั้งค่าเซิร์ฟเวอร์นะ!` 
+            });
+        }
+
         // 🛡️ 1.5 เช็คว่าคนนี้โดนแบนอยู่แล้วไหมเมี๊ยว🐾
         const { data: existingBan } = await supabase
             .from('guild_bans')
@@ -120,8 +135,19 @@ async function cleanupExpiredBans(client) {
 
             if (member) {
                 try {
-                    // คืนยศเดิม และเอายศแบนออก
-                    const rolesToSet = ban.roles || [];
+                    // ตรวจสอบสิทธิ์บอท (ในกรณีที่บอทโดนถอดสิทธิ์ระหว่างทาง)
+                    const botMember = guild.members.me;
+                    if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+                        console.error(`[BanManager] Bot lacks Manage Roles permission in guild ${guild.id}`);
+                        continue;
+                    }
+
+                    // คืนยศเดิม และเอายศแบนออก (กรองเฉพาะยศที่บอทจัดการได้)
+                    const rolesToSet = (ban.roles || []).filter(roleId => {
+                        const role = guild.roles.cache.get(roleId);
+                        return role && role.position < botMember.roles.highest.position;
+                    });
+                    
                     await member.roles.set(rolesToSet, 'Ban expired - Restoring original roles 🐾');
                     
                     // ส่ง DM บอกว่าพ้นโทษแล้วเมี๊ยว🐾
@@ -218,11 +244,22 @@ async function unbanUser(interaction, targetMember) {
             return interaction.editReply({ content: '❌ สมาชิกคนนี้ไม่ได้ถูกแบนโดยระบบ PurrPaw หรือพ้นโทษไปแล้วนะเมี๊ยว🐾' });
         }
 
-        // 2. คืนยศเดิม
-        const rolesToSet = banData.roles || [];
+        // 2. ตรวจสอบสิทธิ์บอท
+        const botMember = guild.members.me;
+        if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+            return interaction.editReply({ content: '❌ บอทไม่มีสิทธิ์ **Manage Roles** (จัดการยศ) เมี๊ยว🐾 โปรดให้สิทธิ์นี้กับบอทด้วยนะ!' });
+        }
+
+        // 3. คืนยศเดิม (กรองเฉพาะยศที่บอทจัดการได้)
+        const rolesToSet = (banData.roles || []).filter(roleId => {
+            const role = guild.roles.cache.get(roleId);
+            // คืนเฉพาะยศที่มีอยู่จริง และอยู่ต่ำกว่ายศบอทเมี๊ยว🐾
+            return role && role.position < botMember.roles.highest.position;
+        });
+
         await targetMember.roles.set(rolesToSet, `Manual Unban by ${interaction.user.tag} 🐾`);
 
-        // 3. อัปเดต DB
+        // 4. อัปเดต DB
         await supabase.from('guild_bans').update({ is_processed: true }).eq('id', banData.id);
 
         // 4. ส่ง DM บอกผู้ใช้

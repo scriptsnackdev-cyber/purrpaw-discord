@@ -29,7 +29,8 @@ module.exports = {
                 const banRoleId = guildData?.settings?.ban_role_id;
                 if (banRoleId) {
                     const banRole = guild.roles.cache.get(banRoleId) || await guild.roles.fetch(banRoleId).catch(() => null);
-                    if (banRole) {
+                    // เช็คว่ามีอยู่จริง และบอทสามารถให้ยศนี้ได้
+                    if (banRole && banRole.position < guild.members.me.roles.highest.position) {
                         await member.roles.add(banRole, 'User rejoined while banned 🐾');
                         console.log(`[Join] Re-applied ban role to ${member.user.tag}`);
                         return; // ⛔ ข้ามขั้นตอนอื่นๆ ไปเรยเมี๊ยว🐾 (ไม่ต้องแจก Welcome/Auto-Role)
