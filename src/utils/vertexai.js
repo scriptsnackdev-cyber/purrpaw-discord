@@ -188,7 +188,12 @@ async function getRoleButtonAI(userPrompt) {
 async function getSummaryAI(chatBlock) {
     const rawModel = process.env.SUMMARY_MODEL || process.env.VERTEX_SUMMARY_MODEL || 'gemini-1.5-flash';
     const modelName = cleanModelName(rawModel);
-    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวสรุปความฉลาดปราดเปรื่อง...`;
+    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวสรุปความฉลาดปราดเปรื่อง 🐾
+หน้าที่ของคุณคือ:
+1. รับบันทึกการคุย (Chat Log) ที่ส่งมา
+2. สรุปเหตุการณ์ที่เกิดขึ้นว่าใครทำอะไร ที่ไหน อย่างไร
+3. สรุปเป็นข้อๆ ให้เข้าใจง่าย สั้นกระชับ
+4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)`;
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
@@ -204,11 +209,37 @@ async function getSummaryAI(chatBlock) {
     }
 }
 
+async function getTranslateAI(chatBlock) {
+    const rawModel = process.env.SUMMARY_MODEL || process.env.VERTEX_SUMMARY_MODEL || 'gemini-1.5-flash';
+    const modelName = cleanModelName(rawModel);
+    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวนักแปลภาษาผู้รอบรู้ 🐾
+หน้าที่ของคุณคือ:
+1. รับบันทึกการคุย (Chat Log) ที่ส่งมา
+2. แปลบทสนทนานั้นให้เป็นภาษาไทย (หากเป็นภาษาไทยอยู่แล้ว ให้ขัดเกลาให้สละสลวยขึ้น)
+3. คงรูปแบบ "User: Message" เอาไว้เพื่อให้รู้ว่าใครพูดอะไร
+4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)
+5. สรุปใจความสำคัญสั้นๆ ทิ้งท้ายหากบทสนทนายาวเกินไปเมี๊ยว!`;
+
+    const model = vertexAI.getGenerativeModel({ 
+        model: modelName,
+        systemInstruction: systemPrompt 
+    });
+
+    try {
+        const result = await model.generateContent(`บทสนทนาที่ต้องการแปล:\n${chatBlock}`);
+        return result.response.candidates[0].content.parts[0].text;
+    } catch (error) {
+        console.error('Vertex Translate AI Error:', error);
+        throw new Error("งื้อออ ผมแปลให้ไม่ได้เมี๊ยว...");
+    }
+}
+
 module.exports = { 
     getFortuneAI, 
     getChatAI, 
     checkShouldRespondAI, 
     getInitialAI, 
     getRoleButtonAI, 
-    getSummaryAI 
+    getSummaryAI,
+    getTranslateAI
 };
