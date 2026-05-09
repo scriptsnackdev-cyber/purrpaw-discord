@@ -89,8 +89,8 @@ module.exports = {
             // เช็คว่า ID ตัวละครมีอยู่จริงเมี๊ยว🐾
             const { data: validChars } = await supabase.from('ai_characters')
                 .select('id, name')
-                .in('id', chars)
-                .or(`name.in.(${chars.map(c => `"${c}"`).join(',')})`);
+                .or(`id.in.(${chars.join(',')}),name.in.(${chars.map(c => `"${c}"`).join(',')})`)
+                .eq('guild_id', guildId);
 
             if (!validChars || validChars.length === 0) {
                 return interaction.editReply({ content: '❌ หาตัวละครที่ระบุไม่เจอเลยเมี๊ยว🐾 กรุณาใช้ระบบ Autocomplete นะ!' });
