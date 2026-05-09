@@ -177,12 +177,14 @@ module.exports = {
 
         // --- Logic: Manual Open ---
         if (sub === 'manual-open') {
-            const settings = await getFillSettings(guildId);
             const { room1, room2 } = await getNextQueueItems(guildId);
 
             if (!room1 && !room2) {
                 return interaction.editReply({ content: '❌ ไม่มีคิวรอรันอยู่ในระบบเมี๊ยว🐾' });
             }
+
+            const { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guildId).single();
+            const settings = guildData?.settings?.bot_fill || {};
 
             if (room1) await setupAndOpenRoom(interaction.guild, 1, room1, settings, true);
             if (room2) await setupAndOpenRoom(interaction.guild, 2, room2, settings, true);
