@@ -233,6 +233,9 @@ async function generateQueueBoard(sessions, room1Queue, room2Queue) {
             const y = startY + 60 + (i * rowHeight);
             const dateStr = sessions[i];
             
+            // รีเซ็ตการจัดวางข้อความให้ชิดซ้ายทุกแถวเมี๊ยว🐾
+            ctx.textAlign = 'left';
+
             // เส้นคั่น
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             ctx.beginPath();
