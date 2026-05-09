@@ -1,7 +1,5 @@
 const axios = require('axios');
 
-
-
 /**
  * OpenRouter AI Utility for Fortune
  */
@@ -34,8 +32,6 @@ async function getFortuneAI(prompt, userMessage) {
 
 /**
  * General Chat AI with Memory support
- * @param {Array} messages - Array of {role: 'system'|'user'|'assistant', content: string}
- * @param {AbortSignal} signal - Optional abort signal
  */
 async function getChatAI(messages, signal = null) {
     const apiKey = process.env.OPENROUTER_API_KEY;
@@ -60,49 +56,21 @@ async function getChatAI(messages, signal = null) {
                 signal: signal
             }
         );
-        const aiResponse = response.data.choices[0].message.content;
-        
-
-
-        return aiResponse;
+        return response.data.choices[0].message.content;
     } catch (error) {
-        if (error.name === 'AbortError' || error.name === 'CanceledError') {
-            return null;
-        }
-        const errorDetail = error.response?.data?.error?.message || error.response?.data || error.message;
-        console.error(`[OpenRouter] Chat AI Error (${model}):`, errorDetail);
-        
-        if (error.response?.status === 429) {
-            return "🐾 *แงงง คนใช้เยอะมากจนแมวตอบไม่ทันแล้วเมี๊ยววว* (Rate Limit)";
-        }
+        if (error.name === 'AbortError' || error.name === 'CanceledError') return null;
+        console.error(`[OpenRouter] Chat AI Error (${model}):`, error.response?.data || error.message);
         return "🐾 *แมวตัวนั้นดูเหมือนจะหลับปุ๋ยไปแล้วเมี๊ยว...* (OpenRouter Error)";
     }
 }
 
 /**
- * ตรวจสอบว่าควรตอบโต้หรือไม่ และใครควรเป็นคนตอบเมี๊ยว🐾
- * @returns {Promise<string[]|null>} รายชื่อบอทที่ควรตอบ หรือ null ถ้าไม่ควรตอบเลย
+ * ตรวจสอบว่าควรตอบโต้หรือไม่
  */
 async function checkShouldRespondAI(recentHistory, botNames, userNames, signal = null) {
     const apiKey = process.env.OPENROUTER_API_KEY;
     const model = process.env.PRECHECK_MODEL || process.env.OPENROUTER_PRECHECK_MODEL || 'google/gemini-2.0-flash-exp:free';
-
-    const systemPrompt = `You are a conversation analyzer for a multi-persona AI chat system.
-Your task is to determine which AI characters (if any) should respond to the latest conversation context.
-
-Available AI Characters: [${botNames}]
-Users in conversation: [${userNames}]
-
-Instruction:
-1. Analyze the chat history to see if any AI characters are being addressed, mentioned, or if their persona would naturally intervene.
-2. For EACH AI character listed above, output a <persona> tag indicating "Yes" or "No".
-3. If no AI should respond, set all to "No".
-
-Output Format:
-<persona name="Alan">No</persona>
-<persona name="Belle">Yes</persona>
-
-Respond ONLY with the XML tags. No thinking, no explanation.`;
+    const systemPrompt = `You are a conversation analyzer for a multi-persona AI chat system...`;
 
     try {
         const response = await axios.post(
@@ -115,35 +83,18 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
                 ],
                 temperature: 0.1
             },
-            { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
-                timeout: 15000,
-                signal: signal
-            }
+            { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 15000, signal: signal }
         );
 
         const content = response.data.choices[0].message.content;
-        
-
-
         const activeBots = [];
-        
-        // ค้นหา <persona name="Name">Yes</persona> (รองรับช่องว่างเผื่อ AI ใส่มาเมี๊ยว🐾)
         const regex = /<persona\s+name\s*=\s*"([^"]+)"\s*>\s*Yes\s*<\/persona>/gi;
         let match;
         while ((match = regex.exec(content)) !== null) {
-            const botName = match[1].trim();
-            activeBots.push(botName);
+            activeBots.push(match[1].trim());
         }
-
         return activeBots.length > 0 ? activeBots : null;
     } catch (error) {
-        if (error.name === 'AbortError' || error.name === 'CanceledError') return null;
-        const errorDetail = error.response?.data?.error?.message || error.response?.data || error.message;
-        console.error(`[OpenRouter] Pre-check Error (${model}):`, errorDetail);
         return null; 
     }
 }
@@ -151,8 +102,7 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
 async function getInitialAI(userPrompt, guildName = "Unknown Server") {
     const apiKey = process.env.OPENROUTER_API_KEY;
     const model = process.env.INITIAL_MODEL || process.env.OPENROUTER_INITIAL_MODEL || 'google/gemini-2.0-flash-exp:free';
-
-    const systemPrompt = `คุณคือสถาปนิกออกแบบ Discord Server มืออาชีพ... (เนื้อหาถูกย่อเพื่อความรวดเร็วเมี๊ยว🐾)`;
+    const systemPrompt = `คุณคือสถาปนิกออกแบบ Discord Server มืออาชีพ...`;
 
     try {
         const response = await axios.post(
@@ -165,17 +115,10 @@ async function getInitialAI(userPrompt, guildName = "Unknown Server") {
                 ],
                 temperature: 0.5
             },
-            { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
-                timeout: 60000 
-            }
+            { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 60000 }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('Initial AI Error:', error.response?.data || error.message);
         throw new Error("ไม่สามารถติดต่อ AI เพื่อออกแบบเซิฟเวอร์ได้เมี๊ยว...");
     }
 }
@@ -183,7 +126,6 @@ async function getInitialAI(userPrompt, guildName = "Unknown Server") {
 async function getRoleButtonAI(userPrompt) {
     const apiKey = process.env.OPENROUTER_API_KEY;
     const model = process.env.ROLE_MODEL || process.env.OPENROUTER_ROLE_MODEL || 'google/gemini-2.0-flash-exp:free';
-
     const systemPrompt = `คุณคือผู้ช่วยออกแบบระบบ Role ใน Discord...`;
 
     try {
@@ -197,17 +139,10 @@ async function getRoleButtonAI(userPrompt) {
                 ],
                 temperature: 0.7
             },
-            { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000
-            }
+            { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('Role AI Error:', error.message);
         throw new Error("ไม่สามารถติดต่อ AI เพื่อออกแบบยศได้เมี๊ยว...");
     }
 }
@@ -215,7 +150,6 @@ async function getRoleButtonAI(userPrompt) {
 async function getSummaryAI(chatBlock) {
     const apiKey = process.env.OPENROUTER_API_KEY;
     const model = process.env.SUMMARY_MODEL || process.env.OPENROUTER_SUMMARY_MODEL || 'google/gemini-2.0-flash-exp:free';
-
     const systemPrompt = `คุณคือ "PurrPaw" บอทแมวสรุปความฉลาดปราดเปรื่อง 🐾
 หน้าที่ของคุณคือ:
 1. รับบันทึกการคุย (Chat Log) ที่ส่งมา
@@ -234,17 +168,10 @@ async function getSummaryAI(chatBlock) {
                 ],
                 temperature: 0.5
             },
-            { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000
-            }
+            { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('Summary AI Error:', error.message);
         throw new Error("งื้อออ ผมสรุปให้ไม่ได้เมี๊ยว...");
     }
 }
@@ -259,7 +186,8 @@ async function getTranslateAI(chatBlock) {
 2. แปลบทสนทนานั้นให้เป็นภาษาไทย (หากเป็นภาษาไทยอยู่แล้ว ให้ขัดเกลาให้สละสลวยขึ้น)
 3. คงรูปแบบ "User: Message" เอาไว้เพื่อให้รู้ว่าใครพูดอะไร
 4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)
-5. สรุปใจความสำคัญสั้นๆ ทิ้งท้ายหากบทสนทนายาวเกินไปเมี๊ยว!`;
+5. สรุปใจความสำคัญสั้นๆ ทิ้งท้ายหากบทสนทนายาวเกินไปเมี๊ยว!
+6. ห้ามใช้เครื่องหมาย @ หรือทำการ Tag ชื่อผู้ใช้เด็ดขาด ให้ใช้ชื่อธรรมดาเท่านั้น เพื่อป้องกันการแจ้งเตือนรบกวนเมี๊ยว!`;
 
     try {
         const response = await axios.post(
@@ -272,17 +200,10 @@ async function getTranslateAI(chatBlock) {
                 ],
                 temperature: 0.5
             },
-            { 
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000
-            }
+            { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error('Translate AI Error:', error.message);
         throw new Error("งื้อออ ผมแปลให้ไม่ได้เมี๊ยว...");
     }
 }

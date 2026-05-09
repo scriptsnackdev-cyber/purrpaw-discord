@@ -47,8 +47,6 @@ function transformMessages(messages) {
                         parts.push({ text: item.text });
                     } else if (item.type === 'image_url') {
                         // Vertex AI SDK รองรับไฟล์ผ่าน base64 หรือ GCS
-                        // สำหรับ URL ตรงๆ อาจต้อง fetch มาก่อน แต่ในที่นี้จะส่งเป็น text หรือข้ามไปก่อนเพื่อความง่าย
-                        // (ในระบบ PurrPaw ส่วนใหญ่เป็น text)
                     }
                 });
             } else {
@@ -91,7 +89,6 @@ async function getChatAI(messages, signal = null) {
     });
 
     try {
-        // ตั้งค่า Timeout ให้ยาวขึ้นเป็น 60 วินาทีเพื่อป้องกัน Headers Timeout Error เมี๊ยว🐾
         const requestOptions = { timeout: 60000 };
         const result = await model.generateContent({ contents }, requestOptions);
         return result.response.candidates[0].content.parts[0].text;
@@ -107,22 +104,7 @@ async function getChatAI(messages, signal = null) {
 async function checkShouldRespondAI(recentHistory, botNames, userNames, signal = null) {
     const rawModel = process.env.PRECHECK_MODEL || process.env.VERTEX_PRECHECK_MODEL || 'gemini-1.5-flash';
     const modelName = cleanModelName(rawModel);
-    const systemPrompt = `You are a conversation analyzer for a multi-persona AI chat system.
-Your task is to determine which AI characters (if any) should respond to the latest conversation context.
-
-Available AI Characters: [${botNames}]
-Users in conversation: [${userNames}]
-
-Instruction:
-1. Analyze the chat history to see if any AI characters are being addressed, mentioned, or if their persona would naturally intervene.
-2. For EACH AI character listed above, output a <persona> tag indicating "Yes" or "No".
-3. If no AI should respond, set all to "No".
-
-Output Format:
-<persona name="Alan">No</persona>
-<persona name="Belle">Yes</persona>
-
-Respond ONLY with the XML tags. No thinking, no explanation.`;
+    const systemPrompt = `You are a conversation analyzer for a multi-persona AI chat system...`;
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
@@ -134,7 +116,6 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
         const content = result.response.candidates[0].content.parts[0].text;
         
         const activeBots = [];
-        // ปรับ Regex ให้ยืดหยุ่นขึ้นเมี๊ยว🐾 (รองรับเคสเว้นวรรคเยอะๆ หรือไม่มีฟันหนู)
         const regex = /<persona\s+name\s*=\s*["']?([^"'>]+)["']?\s*>\s*Yes\s*<\/persona>/gi;
         let match;
         while ((match = regex.exec(content)) !== null) {
@@ -150,7 +131,7 @@ Respond ONLY with the XML tags. No thinking, no explanation.`;
 async function getInitialAI(userPrompt, guildName = "Unknown Server") {
     const rawModel = process.env.INITIAL_MODEL || process.env.VERTEX_INITIAL_MODEL || 'gemini-1.5-flash';
     const modelName = cleanModelName(rawModel);
-    const systemPrompt = `คุณคือสถาปนิกออกแบบ Discord Server มืออาชีพ... (เนื้อหาถูกย่อเพื่อความรวดเร็วเมี๊ยว🐾)`;
+    const systemPrompt = `คุณคือสถาปนิกออกแบบ Discord Server มืออาชีพ...`;
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
@@ -218,7 +199,8 @@ async function getTranslateAI(chatBlock) {
 2. แปลบทสนทนานั้นให้เป็นภาษาไทย (หากเป็นภาษาไทยอยู่แล้ว ให้ขัดเกลาให้สละสลวยขึ้น)
 3. คงรูปแบบ "User: Message" เอาไว้เพื่อให้รู้ว่าใครพูดอะไร
 4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)
-5. สรุปใจความสำคัญสั้นๆ ทิ้งท้ายหากบทสนทนายาวเกินไปเมี๊ยว!`;
+5. สรุปใจความสำคัญสั้นๆ ทิ้งท้ายหากบทสนทนายาวเกินไปเมี๊ยว!
+6. ห้ามใช้เครื่องหมาย @ หรือทำการ Tag ชื่อผู้ใช้เด็ดขาด ให้ใช้ชื่อธรรมดาเท่านั้น เพื่อป้องกันการแจ้งเตือนรบกวนเมี๊ยว!`;
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
