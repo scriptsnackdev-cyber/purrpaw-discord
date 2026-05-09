@@ -141,8 +141,8 @@ async function setupAndOpenRoom(guild, roomNumber, queueItem, settings, isManual
 
     // 4. บันทึก ID ห้องลงใน Queue เมี๊ยว🐾 (เพื่อเอาไว้ตามไปลบ)
     await supabase.from('bot_fill_queue').update({ 
-        active_channel_id: channel.id,
-        is_processed: isManual // ถ้าเปิดแบบ Manual ให้ Mark ว่า Process แล้วทันที
+        room_id: channel.id,
+        is_processed: isManual 
     }).eq('id', queueItem.id);
 
     // 5. Summon บอท
@@ -175,21 +175,21 @@ async function setupAndOpenRoom(guild, roomNumber, queueItem, settings, isManual
 }
 
 async function closeAndCleanup(guild, queueItem) {
-    if (!queueItem || !queueItem.active_channel_id) return;
+    if (!queueItem || !queueItem.room_id) return;
 
     try {
-        const channel = await guild.channels.fetch(queueItem.active_channel_id).catch(() => null);
+        const channel = await guild.channels.fetch(queueItem.room_id).catch(() => null);
         if (channel) {
             await channel.delete('Bot Fill Session Cleanup 🐾');
         }
 
         // ล้าง AI Chat Cache
-        await supabase.from('active_ai_chats').delete().eq('channel_id', queueItem.active_channel_id);
+        await supabase.from('active_ai_chats').delete().eq('channel_id', queueItem.room_id);
 
         // Mark คิวว่ารันเสร็จแล้ว และล้าง ID ห้องเมี๊ยว🐾
         await supabase.from('bot_fill_queue').update({ 
             is_processed: true,
-            active_channel_id: null
+            room_id: null
         }).eq('id', queueItem.id);
 
     } catch (error) {
