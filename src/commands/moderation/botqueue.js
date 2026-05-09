@@ -196,8 +196,7 @@ module.exports = {
                 .from('bot_fill_queue')
                 .select('*')
                 .eq('guild_id', guildId)
-                .eq('is_processed', false)
-                .not('active_channel_id', 'is', null);
+                .not('active_channel_id', 'is', null); // หาจากห้องที่ยังมี ID ค้างอยู่เมี๊ยว🐾
 
             if (!activeQueue || activeQueue.length === 0) {
                 return interaction.editReply({ content: '❌ ไม่พบห้องเติมบอทที่กำลังรันอยู่ในขณะนี้เมี๊ยว🐾' });
