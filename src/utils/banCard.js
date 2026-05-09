@@ -6,7 +6,7 @@ const { AttachmentBuilder } = require('discord.js');
 /**
  * 🎨 ฟังก์ชันวาดบัตรประกาศแบนเมี๊ยว🐾
  */
-async function generateBanCard(targetUser, duration, reason, guild) {
+async function generateBanCard(target, duration, reason, guild) {
     const canvas = createCanvas(984, 282);
     const ctx = canvas.getContext('2d');
 
@@ -39,7 +39,8 @@ async function generateBanCard(targetUser, duration, reason, guild) {
         ctx.closePath();
         ctx.clip();
         
-        const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 256 });
+        // ใช้ displayAvatarURL ของ GuildMember จะดึงรูปโปรในเซิร์ฟถ้ามีเมี๊ยว🐾
+        const avatarURL = target.displayAvatarURL({ extension: 'png', size: 256 });
         const avatarImg = await loadImage(avatarURL);
         ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
         ctx.restore();
@@ -48,10 +49,10 @@ async function generateBanCard(targetUser, duration, reason, guild) {
         const redColor = '#FF4D4D';
         const whiteColor = '#FFFFFF';
         
-        // ชื่อผู้โดนแบน
+        // ชื่อผู้โดนแบน (ใช้ displayName จะเป็น Nickname ถ้ามีเมี๊ยว🐾)
         ctx.fillStyle = whiteColor;
         ctx.font = `bold 36px ${fontStackBold}`;
-        ctx.fillText(targetUser.displayName, 260, 75);
+        ctx.fillText(target.displayName, 260, 75);
 
         // สถานะ: BANNED
         ctx.fillStyle = redColor;

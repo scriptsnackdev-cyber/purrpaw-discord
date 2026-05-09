@@ -108,7 +108,7 @@ async function banUser(interaction, targetMember, minutes, reason) {
         }
 
         // 7. ประกาศการลงโทษแบบนิรนาม (ส่งเข้าห้องโดยไม่ระบุชื่อคนแบน) เมี๊ยว🐾
-        const banCard = await generateBanCard(targetMember.user, minutes, reason, guild);
+        const banCard = await generateBanCard(targetMember, minutes, reason, guild);
         
         await interaction.channel.send({
             content: `📢 **ประกาศการลงโทษเมี๊ยว!**`,
@@ -226,7 +226,7 @@ async function toggleBanSystem(interaction, enable) {
 
             await supabase.from('guilds').update({ settings }).eq('id', guildId);
 
-            return interaction.editReply({ content: `✅ **เปิดใช้งานระบบแบนเรียบร้อยแล้วเมี๊ยว!**\nยศแบนคือ: <@&${banRole.id}>\n(คุณสามารถเปลี่ยนชื่อยศหรือสีได้ตามใจชอบเลยเมี๊ยว🐾)` });
+            return interaction.editReply({ content: `✅ **เปิดใช้งานระบบแบนเรียบร้อยแล้วเมี๊ยว!**\nรหัสยศคือ: <@&${banRole.id}>\n(คุณสามารถเปลี่ยนชื่อยศหรือสีได้ตามใจชอบเลยเมี๊ยว🐾)` });
         } catch (error) {
             console.error('[BanManager] Enable Error:', error);
             return interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการเปิดระบบเมี๊ยว🐾' });
