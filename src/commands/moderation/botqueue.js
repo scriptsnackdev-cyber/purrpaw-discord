@@ -45,7 +45,10 @@ module.exports = {
         const sub = interaction.options.getSubcommand();
         const guildId = interaction.guildId;
 
-        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
+        // Defer ถูกจัดการโดย interactionCreate.js แล้วเมี๊ยว🐾
+        if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
+        }
 
         // --- Logic: Enable / Disable ---
         if (sub === 'enable' || sub === 'disable') {

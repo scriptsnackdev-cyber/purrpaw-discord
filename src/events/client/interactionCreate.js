@@ -36,7 +36,7 @@ module.exports = {
         try {
             // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache ---
             // ⭐ สำหรับคำสั่ง aichat ให้ Defer ไว้ก่อนทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
-            if (interaction.isChatInputCommand() && interaction.commandName === 'aichat') {
+            if (interaction.isChatInputCommand() && ['aichat', 'botqueue'].includes(interaction.commandName)) {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
             }
 
