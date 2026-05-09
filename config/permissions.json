@@ -2,6 +2,8 @@
     "adminRoles": ["Administrator"],
     "adminUsers": [],
     "commands": {
-        "botqueue": "admin"
+        "botqueue": "admin",
+        "summary": "admin",
+        "translate": "admin"
     }
 }
