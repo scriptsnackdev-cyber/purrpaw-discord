@@ -20,8 +20,6 @@ module.exports = {
             sub.setName('config')
                 .setDescription('⚙️ ตั้งค่าระบบคิวเติมบอท')
                 .addChannelOption(opt => opt.setName('category').setDescription('เลือก Category ที่จะสร้างห้อง').addChannelTypes(ChannelType.GuildCategory))
-                .addRoleOption(opt => opt.setName('admin_role').setDescription('ยศ Admin/Mod ที่คุมระบบ'))
-                .addStringOption(opt => opt.setName('bg_url').setDescription('URL รูปพื้นหลังของ Station Card'))
         )
 
         // Subcommand: Add Queue
@@ -65,19 +63,15 @@ module.exports = {
         // --- Logic: Config ---
         if (sub === 'config') {
             const category = interaction.options.getChannel('category');
-            const adminRole = interaction.options.getRole('admin_role');
-            const bgUrl = interaction.options.getString('bg_url');
 
             const { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guildId).single();
             const settings = guildData?.settings || {};
             if (!settings.bot_fill) settings.bot_fill = {};
 
             if (category) settings.bot_fill.category_id = category.id;
-            if (adminRole) settings.bot_fill.admin_role_id = adminRole.id;
-            if (bgUrl) settings.bot_fill.bg_url = bgUrl;
 
             await supabase.from('guilds').update({ settings }).eq('id', guildId);
-            return interaction.editReply({ content: '⚙️ บันทึกการตั้งค่าระบบคิวเติมบอทเรียบร้อยแล้วเมี๊ยว🐾' });
+            return interaction.editReply({ content: '⚙️ บันทึกการตั้งค่าระบบคิวเติมบอทเรียบร้อยแล้วเมี๊ยว🐾\n(ใช้รูปพื้นหลังจาก Assets และอ้างอิงสิทธิ์ Admin/Mod จากระบบหลักโดยอัตโนมัติ)' });
         }
 
         // --- Logic: Add ---

@@ -4,6 +4,7 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { drawBackground } = require('./canvasHelper');
 const { fontStack, fontStackBold } = require('./fontHelper');
 const { AttachmentBuilder } = require('discord.js');
+const path = require('path');
 
 /**
  * 🐾 ตัวจัดการระบบเติมบอทอัตโนมัติ (PurrPaw Auto-Bot Station)
@@ -38,12 +39,13 @@ async function getNextQueueItems(guildId) {
     return { room1, room2 };
 }
 
-async function createStationCard(characters, bgUrl) {
+async function createStationCard(characters) {
     const canvas = createCanvas(800, 300);
     const ctx = canvas.getContext('2d');
 
     try {
-        await drawBackground(ctx, canvas.width, canvas.height, bgUrl);
+        const bgPath = path.join(__dirname, '../assets/rank_bg.png');
+        await drawBackground(ctx, canvas.width, canvas.height, bgPath);
 
         // Overlay สวยๆ
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -107,7 +109,6 @@ async function setupAndOpenRoom(guild, roomNumber, queueItem, settings, isManual
 
     const categoryId = settings.category_id;
     
-    // 2. ตั้งสิทธิ์
     const permissionOverwrites = [
         {
             id: guild.roles.everyone.id,
@@ -115,12 +116,19 @@ async function setupAndOpenRoom(guild, roomNumber, queueItem, settings, isManual
         }
     ];
 
-    // เพิ่ม Admin/Mod Role ถ้ามี
-    if (settings.admin_role_id) {
-        permissionOverwrites.push({
-            id: settings.admin_role_id,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        });
+    // 🛡️ ดึงสิทธิ์ Mod/Admin จากระบบ Permission หลักเมี๊ยว🐾
+    const { data: guildData } = await supabase.from('guilds').select('settings').eq('id', guild.id).single();
+    const modRoles = guildData?.settings?.permissions?.mod_roles || [];
+    
+    // ให้สิทธิ์ Mod ทุกคนเข้าห้องได้ในช่วง Setup
+    for (const roleRef of modRoles) {
+        const role = guild.roles.cache.get(roleRef) || guild.roles.cache.find(r => r.name === roleRef);
+        if (role) {
+            permissionOverwrites.push({
+                id: role.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+            });
+        }
     }
 
     // 3. สร้างห้อง
@@ -153,7 +161,7 @@ async function setupAndOpenRoom(guild, roomNumber, queueItem, settings, isManual
         });
     } else {
         // ส่ง Station Card (เฉพาะระบบ Auto)
-        const card = await createStationCard(characters, settings.bg_url);
+        const card = await createStationCard(characters);
         if (card) {
             await channel.send({ 
                 content: `🚀 **กำลังเตรียมความพร้อมของสถานีเติมบอทที่ ${roomNumber}...**`,
