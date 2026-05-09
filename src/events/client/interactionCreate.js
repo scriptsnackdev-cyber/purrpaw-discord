@@ -36,7 +36,7 @@ module.exports = {
         try {
             // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache ---
             // ⭐ สำหรับคำสั่ง aichat ให้ Defer ไว้ก่อนทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
-            if (interaction.isChatInputCommand() && ['aichat', 'botqueue'].includes(interaction.commandName)) {
+            if (interaction.isChatInputCommand() && ['aichat', 'botqueue', 'translate'].includes(interaction.commandName)) {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
             }
 
@@ -745,6 +745,35 @@ module.exports = {
                 const originalId = customId.split(':')[1];
                 interaction.client.summaryCache?.delete(originalId);
                 return interaction.update({ content: '❌ ยกเลิกการส่งสรุปแล้วเมี๊ยว!🐾', embeds: [], components: [] });
+            }
+
+            // --- Translate: Send/Cancel ---
+            else if (customId.startsWith('translate_send:')) {
+                const originalId = customId.split(':')[1];
+                const cached = interaction.client.translateCache?.get(originalId);
+
+                if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+
+                await interaction.deferUpdate();
+
+                const embed = new EmbedBuilder()
+                    .setTitle('🌐 แปลบทสนทนาในห้องนี้เมี๊ยวว! 🐾')
+                    .setDescription(cached.content)
+                    .setColor('#00AAFF')
+                    .setThumbnail(interaction.client.user.displayAvatarURL())
+                    .setFooter({ text: `แปลโดย PurrPaw AI (ย้อนหลัง ${cached.limit} ข้อความ) 🐈✨` })
+                    .setTimestamp();
+
+                await interaction.channel.send({ embeds: [embed] });
+                
+                interaction.client.translateCache.delete(originalId);
+                return interaction.editReply({ content: '✅ ส่งบทแปลเข้าห้องเรียบร้อยแล้วเมี๊ยวว!🐾', embeds: [], components: [] });
+            }
+
+            else if (customId.startsWith('translate_cancel:')) {
+                const originalId = customId.split(':')[1];
+                interaction.client.translateCache?.delete(originalId);
+                return interaction.update({ content: '❌ ยกเลิกการส่งบทแปลแล้วเมี๊ยว!🐾', embeds: [], components: [] });
             }
 
             // --- [Ticket] ปุ่มเปลี่ยนสถานะ (สำหรับ Admin) ---
