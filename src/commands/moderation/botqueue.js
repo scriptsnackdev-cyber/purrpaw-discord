@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
 const supabase = require('../../supabaseClient');
-const { getFillSettings, getNextQueueItems, setupAndOpenRoom, closeAndCleanup } = require('../../utils/botFillManager');
+const { getFillSettings, getNextQueueItems, setupAndOpenRoom, closeAndCleanup, generateQueueBoard } = require('../../utils/botFillManager');
 const dayjs = require('dayjs');
 
 module.exports = {
@@ -34,6 +34,16 @@ module.exports = {
 
         // Subcommand: List
         .addSubcommand(sub => sub.setName('list').setDescription('📋 ดูตารางคิวและวันที่จะรันในอนาคต'))
+
+        // Subcommand: Remove
+        .addSubcommand(sub => 
+            sub.setName('remove')
+                .setDescription('➖ ลบคิวที่เลือกออกจากรายการ')
+                .addStringOption(opt => opt.setName('id').setDescription('เลือกคิวที่ต้องการลบ').setRequired(true).setAutocomplete(true))
+        )
+
+        // Subcommand: Clear
+        .addSubcommand(sub => sub.setName('clear').setDescription('🗑️ ล้างคิวที่รอรันทั้งหมดในเซิร์ฟเวอร์นี้'))
 
         // Subcommand: Manual Open
         .addSubcommand(sub => sub.setName('manual-open').setDescription('🚀 สั่งเปิดห้องเติมบอททันที (จากคิวล่าสุด)'))
@@ -124,7 +134,15 @@ module.exports = {
             // คำนวณวันที่รันคิว (Tue, Thu, Sat)
             const getNextSessions = (count) => {
                 const sessions = [];
-                let current = dayjs().startOf('day');
+                let current = dayjs();
+                
+                // 🕒 ถ้าเวลาเกิน 17:50 น. ของวันนี้แล้ว ให้เริ่มหาจากพรุ่งนี้เป็นต้นไปเมี๊ยว🐾
+                if (current.hour() > 17 || (current.hour() === 17 && current.minute() >= 50)) {
+                    current = current.add(1, 'day').startOf('day');
+                } else {
+                    current = current.startOf('day');
+                }
+
                 while (sessions.length < count) {
                     const day = current.day(); // 0=Sun, 1=Mon, 2=Tue...
                     if ([2, 4, 6].includes(day)) {
@@ -137,24 +155,16 @@ module.exports = {
 
             const room1Queue = queue.filter(q => q.room_number === 1);
             const room2Queue = queue.filter(q => q.room_number === 2);
-            const maxCount = Math.max(room1Queue.length, room2Queue.length);
+            const maxCount = Math.max(room1Queue.length, room2Queue.length, 3); // โชว์อย่างน้อย 3 วัน
             const sessions = getNextSessions(maxCount);
 
-            const embed = new EmbedBuilder()
-                .setTitle('📋 ตารางคิวเติมบอทอัตโนมัติเมี๊ยว🐾')
-                .setColor(0xFFB6C1)
-                .setFooter({ text: 'รันทุกวันอังคาร พฤหัส และเสาร์ เวลา 18:00 - 00:00' });
-
-            let listContent = '';
-            for (let i = 0; i < maxCount; i++) {
-                const dateStr = sessions[i];
-                const r1 = room1Queue[i] ? '✅ มีคิว' : '➖ ว่าง';
-                const r2 = room2Queue[i] ? '✅ มีคิว' : '➖ ว่าง';
-                listContent += `📅 **${dateStr}**\n   ห้อง 1: ${r1} | ห้อง 2: ${r2}\n\n`;
+            const board = await generateQueueBoard(sessions, room1Queue, room2Queue);
+            
+            if (!board) {
+                return interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการสร้างรูปตารางคิวเมี๊ยว🐾' });
             }
 
-            embed.setDescription(listContent || 'ไม่มีรายการคิว');
-            return interaction.editReply({ embeds: [embed] });
+            return interaction.editReply({ files: [board] });
         }
 
         // --- Logic: Manual Open ---
@@ -191,20 +201,65 @@ module.exports = {
 
             return interaction.editReply({ content: '🧹 สั่งปิดและลบห้องเติมบอทด้วยระบบ Manual เรียบร้อยแล้วเมี๊ยว🐾' });
         }
+
+        // --- Logic: Remove ---
+        if (sub === 'remove') {
+            const id = interaction.options.getString('id');
+            const { error } = await supabase.from('bot_fill_queue').delete().eq('id', id);
+            
+            if (error) return interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการลบคิวเมี๊ยว🐾' });
+            return interaction.editReply({ content: '✅ ลบคิวที่เลือกเรียบร้อยแล้วเmi๊ยวว!🐾' });
+        }
+
+        // --- Logic: Clear ---
+        if (sub === 'clear') {
+            const { error } = await supabase.from('bot_fill_queue').delete().eq('guild_id', guildId).eq('is_processed', false);
+            
+            if (error) return interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการล้างคิวเมี๊ยว🐾' });
+            return interaction.editReply({ content: '🗑️ ล้างคิวที่รอรันทั้งหมดเรียบร้อยแล้วเมี๊ยวว!🐾' });
+        }
     },
 
     async autocomplete(interaction) {
-        const focusedValue = interaction.options.getFocused().toLowerCase();
+        const focused = interaction.options.getFocused().toLowerCase();
+        const sub = interaction.options.getSubcommand();
         const guildId = interaction.guildId;
 
-        const { data: chars } = await supabase.from('ai_characters')
-            .select('id, name')
-            .eq('guild_id', guildId)
-            .ilike('name', `%${focusedValue}%`)
-            .limit(25);
+        if (sub === 'remove') {
+            const { data: queue } = await supabase
+                .from('bot_fill_queue')
+                .select('*')
+                .eq('guild_id', guildId)
+                .eq('is_processed', false)
+                .order('created_at', { ascending: true })
+                .limit(25);
 
-        if (chars) {
-            await interaction.respond(chars.map(c => ({ name: c.name, value: c.id })));
+            if (!queue) return interaction.respond([]);
+
+            const { data: allChars } = await supabase.from('ai_characters').select('id, name');
+            const charMap = new Map(allChars?.map(c => [c.id, c.name]));
+
+            const options = queue.map(q => {
+                const names = q.character_ids.split(',').map(id => charMap.get(id.trim()) || 'Unknown').join(', ');
+                return {
+                    name: `[ห้อง ${q.room_number}] ${names}`.substring(0, 100),
+                    value: q.id
+                };
+            }).filter(opt => opt.name.toLowerCase().includes(focused));
+
+            return interaction.respond(options);
+        }
+
+        if (sub === 'add') {
+            const { data: chars } = await supabase.from('ai_characters')
+                .select('id, name')
+                .eq('guild_id', guildId)
+                .ilike('name', `%${focused}%`)
+                .limit(25);
+
+            if (chars) {
+                await interaction.respond(chars.map(c => ({ name: c.name, value: c.id })));
+            }
         }
     }
 };

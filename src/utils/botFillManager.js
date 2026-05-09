@@ -195,9 +195,99 @@ async function closeAndCleanup(guild, queueItem) {
     }
 }
 
+async function generateQueueBoard(sessions, room1Queue, room2Queue) {
+    const canvas = createCanvas(1000, 600);
+    const ctx = canvas.getContext('2d');
+    const bgPath = path.join(__dirname, '../assets/rank_bg.png');
+
+    try {
+        await drawBackground(ctx, canvas.width, canvas.height, bgPath);
+
+        // Overlay & Title
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.roundRect(30, 30, 940, 540, 30);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFB6C1';
+        ctx.font = `bold 40px ${fontStackBold}`;
+        ctx.textAlign = 'center';
+        ctx.fillText('📋 ตารางคิวสถานีเติมบอทอัตโนมัติ', 500, 85);
+
+        // Table Header
+        const startY = 140;
+        const colWidths = [250, 320, 320];
+        const rowHeight = 120;
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(50, startY, 900, 50);
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `bold 24px ${fontStackBold}`;
+        ctx.textAlign = 'left';
+        ctx.fillText('วันที่', 80, startY + 35);
+        ctx.fillText('ห้องที่ 1', 350, startY + 35);
+        ctx.fillText('ห้องที่ 2', 670, startY + 35);
+
+        // Draw Rows
+        for (let i = 0; i < Math.min(sessions.length, 3); i++) { // โชว์สูงสุด 3 วัน
+            const y = startY + 60 + (i * rowHeight);
+            const dateStr = sessions[i];
+            
+            // เส้นคั่น
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.moveTo(50, y + rowHeight - 10);
+            ctx.lineTo(950, y + rowHeight - 10);
+            ctx.stroke();
+
+            // วันที่
+            ctx.fillStyle = '#FFB6C1';
+            ctx.font = `bold 22px ${fontStackBold}`;
+            ctx.fillText(dateStr, 70, y + 65);
+
+            // วาด Chatheads สำหรับแต่ละห้อง
+            const drawChatheads = async (qItem, startX) => {
+                if (!qItem) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.font = `italic 20px ${fontStack}`;
+                    ctx.fillText('ว่าง / ไม่มีคิว', startX, y + 65);
+                    return;
+                }
+
+                const charIds = qItem.character_ids.split(',').map(id => id.trim());
+                const { data: chars } = await supabase.from('ai_characters').select('image_url').in('id', charIds);
+                
+                if (chars) {
+                    const size = 60;
+                    for (let j = 0; j < chars.length; j++) {
+                        const img = await loadImage(chars[j].image_url).catch(() => null);
+                        if (img) {
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.arc(startX + (j * 70) + size/2, y + 30 + size/2, size/2, 0, Math.PI * 2);
+                            ctx.clip();
+                            ctx.drawImage(img, startX + (j * 70), y + 30, size, size);
+                            ctx.restore();
+                        }
+                    }
+                }
+            };
+
+            await drawChatheads(room1Queue[i], 330);
+            await drawChatheads(room2Queue[i], 650);
+        }
+
+        return new AttachmentBuilder(await canvas.encode('png'), { name: 'queue_board.png' });
+    } catch (error) {
+        console.error('[BotFillManager] Board Error:', error);
+        return null;
+    }
+}
+
 module.exports = { 
     getFillSettings, 
     getNextQueueItems, 
     setupAndOpenRoom, 
-    closeAndCleanup 
+    closeAndCleanup,
+    generateQueueBoard
 };
