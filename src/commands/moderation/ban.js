@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const { banUser, toggleBanSystem } = require('../../utils/banManager');
 
 module.exports = {
@@ -55,7 +55,7 @@ module.exports = {
 
             // เช็คว่าแบนคนที่มีลำดับยศสูงกว่าไม่ได้
             if (!targetUser.manageable) {
-                return interaction.reply({ content: '❌ บอทไม่มีสิทธิ์จัดการสมาชิกคนนี้เมี๊ยว🐾 (เขายศสูงกว่าบอทนะ!)', ephemeral: true });
+                return interaction.reply({ content: '❌ บอทไม่มีสิทธิ์จัดการสมาชิกคนนี้เมี๊ยว🐾 (เขายศสูงกว่าบอทนะ!)', flags: [MessageFlags.Ephemeral] });
             }
 
             return await banUser(interaction, targetUser, time, remark);

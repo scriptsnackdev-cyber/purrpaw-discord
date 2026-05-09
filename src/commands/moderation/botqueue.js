@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
 const supabase = require('../../supabaseClient');
 const { getFillSettings, getNextQueueItems, setupAndOpenRoom, closeAndCleanup } = require('../../utils/botFillManager');
 const dayjs = require('dayjs');
@@ -45,7 +45,7 @@ module.exports = {
         const sub = interaction.options.getSubcommand();
         const guildId = interaction.guildId;
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
 
         // --- Logic: Enable / Disable ---
         if (sub === 'enable' || sub === 'disable') {
