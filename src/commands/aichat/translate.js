@@ -14,7 +14,7 @@ module.exports = {
 
     async execute(interaction) {
         const limit = interaction.options.getInteger('limit') || 20;
-        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        // 💡 Defer ถูกจัดการโดย interactionCreate.js แล้วเมี๊ยว🐾
 
         try {
             // 1. ดึงข้อความล่าสุด

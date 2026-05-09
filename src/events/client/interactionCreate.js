@@ -36,7 +36,7 @@ module.exports = {
         try {
             // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache ---
             // ⭐ สำหรับคำสั่ง aichat ให้ Defer ไว้ก่อนทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
-            if (interaction.isChatInputCommand() && ['aichat', 'botqueue', 'translate'].includes(interaction.commandName)) {
+            if (interaction.isChatInputCommand() && ['aichat', 'botqueue', 'translate', 'summary'].includes(interaction.commandName)) {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
             }
 
@@ -276,7 +276,7 @@ module.exports = {
 
             // --- ปุ่มปฏิเสธฟอร์ม (แอดมิน) ---
             else if (customId.startsWith('form_reject:')) {
-                if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+                if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมมนเท่านั้นที่ลบปุ่มนี้ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0xEF4444).addFields({ name: 'สถานะ', value: `❌ ปฏิเสธโดย ${user.tag}` });
                 await interaction.update({ embeds: [newEmbed], components: [] });
             }
@@ -827,266 +827,28 @@ module.exports = {
                 const row = ActionRowBuilder.from(interaction.message.components[0]);
                 // ตรวจสอบว่ามีปุ่มลบอยู่หรือยัง ถ้าไม่มีให้เพิ่มเมี๊ยว🐾
                 if (!row.components.find(c => c.data.custom_id?.startsWith('ticket_delete:'))) {
-                    row.addComponents(
-                        new ButtonBuilder().setCustomId(`ticket_delete:${ticketId}`).setLabel('ลบ').setStyle(ButtonStyle.Secondary).setEmoji('🗑️')
-                    );
+                    row.addComponents(new ButtonBuilder().setCustomId(`ticket_delete:${ticketId}`).setLabel('ลบข้อมูล').setStyle(ButtonStyle.Secondary).setEmoji('🗑️'));
                 }
 
                 // ส่งเข้าห้องใหม่
                 const newMsg = await targetChannel.send({ embeds: [newEmbed], components: [row] });
                 
-                // อัปเดต Message ID
-                await supabase.from('tickets').update({ admin_message_id: newMsg.id }).eq('id', ticketId);
-
                 // ลบข้อความเก่า
                 await interaction.message.delete().catch(() => {});
-
-                await interaction.editReply({ content: `✅ ย้าย Ticket ไปที่ห้อง <#${targetChannelId}> เรียบร้อยแล้วเมี๊ยวว!🐾` });
+                
+                return interaction.editReply({ content: `✅ ย้าย Ticket ไปยังห้อง <#${targetChannelId}> เรียบร้อยแล้วเมี๊ยวว!🐾` });
             }
 
-            // --- [Ticket] ปุ่มลบ Ticket รายอัน ---
+            // --- [Ticket] ปุ่มลบข้อมูล (สำหรับ Admin) ---
             else if (customId.startsWith('ticket_delete:')) {
                 const ticketId = customId.split(':')[1];
                 if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
                     return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ลบ Ticket ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
                 }
 
-                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
                 await supabase.from('tickets').delete().eq('id', ticketId);
                 await interaction.message.delete().catch(() => {});
-                return interaction.editReply({ content: '🗑️ ลบ Ticket ออกจากระบบเรียบร้อยแล้วเมี๊ยว!' });
-            }
-
-            // --- [Ticket] ปุ่มยืนยันล้างทั้งหมด ---
-            else if (customId === 'ticket_clean_confirm') {
-                if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-                    return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่สั่งล้างข้อมูลได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
-                }
-
-                await interaction.deferUpdate();
-                await interaction.editReply({ content: '⏳ กำลังล้างข้อมูล Ticket ทั้งหมด... อาจใช้เวลาสักครู่นะเมี๊ยว🐾', components: [] });
-
-                try {
-                    const { data: tickets } = await supabase.from('tickets').select('*').eq('guild_id', guild.id);
-                    
-                    if (tickets && tickets.length > 0) {
-                        for (const t of tickets) {
-                            // พยายามลบข้อความใน Discord
-                            try {
-                                const ch = guild.channels.cache.get(t.admin_channel_id);
-                                if (ch) {
-                                    const msg = await ch.messages.fetch(t.admin_message_id).catch(() => null);
-                                    if (msg) await msg.delete().catch(() => {});
-                                }
-                            } catch (e) {}
-                        }
-                        // ลบจาก Database
-                        await supabase.from('tickets').delete().eq('guild_id', guild.id);
-                    }
-
-                    return interaction.editReply({ content: '✅ ล้างข้อมูล Ticket และข้อความทั้งหมดในเซิร์ฟเวอร์เรียบร้อยแล้วเมี๊ยวว!🐾', embeds: [] });
-                } catch (err) {
-                    console.error('All-Clean Error:', err);
-                    return interaction.editReply({ content: `❌ เกิดข้อผิดพลาดในการล้างข้อมูล: ${err.message}`, embeds: [] });
-                }
-            }
-
-            // --- [Ticket] ปุ่มยกเลิกการล้าง ---
-            else if (customId === 'ticket_clean_cancel') {
-                return await interaction.update({ content: '❌ ยกเลิกการล้างข้อมูลแล้วเมี๊ยว!', embeds: [], components: [] });
-            }
-
-            // --- ปุ่มดูคิวเพลง + ขึ้นมาคิวแรก ---
-            else if (customId === 'music_queue_btn') {
-                const queue = interaction.client.distube.getQueue(interaction.guildId);
-                if (!queue || queue.songs.length <= 1) {
-                    return interaction.reply({ content: '📭 ไม่มีเพลงต่อแถวอยู่ในคิวเลยเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-                }
-
-                const upcoming = queue.songs.slice(1, 6);
-                const queueList = upcoming.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
-
-                // ⭐ บันทึก Snapshot เพื่อป้องกัน Race Condition เมี๊ยว🐾
-                if (!interaction.client._queueSnapshots) interaction.client._queueSnapshots = new Map();
-                const snapshotKey = `${interaction.guildId}-${user.id}`;
-                interaction.client._queueSnapshots.set(snapshotKey, {
-                    songs: upcoming.map(s => ({ name: s.name, url: s.url })),
-                    timestamp: Date.now(),
-                });
-
-                const modal = new ModalBuilder()
-                    .setCustomId('music_queue_jump')
-                    .setTitle('📋 คิวเพลงถัดไปเมี๊ยว🐾');
-
-                const listInput = new TextInputBuilder()
-                    .setCustomId('music_queue_list')
-                    .setLabel('เพลงที่รออยู่ในคิว')
-                    .setStyle(TextInputStyle.Paragraph)
-                    .setValue(queueList)
-                    .setRequired(false);
-
-                const pickInput = new TextInputBuilder()
-                    .setCustomId('music_queue_pick')
-                    .setLabel('พิมพ์หมายเลขเพลงที่ต้องการขึ้นมาก่อน (1-5)')
-                    .setStyle(TextInputStyle.Short)
-                    .setPlaceholder('เช่น: 2')
-                    .setRequired(false);
-
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(listInput),
-                    new ActionRowBuilder().addComponents(pickInput),
-                );
-                await interaction.showModal(modal);
-            }
-
-            // --- ปุ่มเพิ่มเพลงผ่าน Popup ---
-            else if (customId === 'music_add_modal') {
-                const modal = new ModalBuilder()
-                    .setCustomId('music_add_submit')
-                    .setTitle('➕ เพิ่มเพลงเข้าคิวเมี๊ยว🐾');
-                const input = new TextInputBuilder()
-                    .setCustomId('music_query_input')
-                    .setLabel('ชื่อเพลงหรือลิงก์ YouTube เมี๊ยว')
-                    .setStyle(TextInputStyle.Short)
-                    .setPlaceholder('เช่น: Dandelions - Ruth B หรือ https://youtube.com/...')
-                    .setRequired(true);
-                modal.addComponents(new ActionRowBuilder().addComponents(input));
-                await interaction.showModal(modal);
-            }
-
-            // --- ปุ่มควบคุมเพลง ---
-            else if (customId.startsWith('music_')) {
-                const queue = interaction.client.distube.getQueue(interaction.guildId);
-                const action = customId.replace('music_', '');
-                
-                try {
-                    // --- กรณีพิเศษ: สั่งให้ออกห้องเมี๊ยว (ไม่ต้องมีคิวก็ได้) ---
-                    if (action === 'leave') {
-                        const voice = interaction.client.distube.voices.get(interaction.guildId);
-                        if (voice) {
-                            await voice.leave();
-                            return await interaction.reply({ content: '⏹️ แยกย้ายกันกลับบ้านนะเมี๊ยวว!🐾🌸', flags: [MessageFlags.Ephemeral] });
-                        } else {
-                            return await interaction.reply({ content: '❌ บอทไม่ได้อยู่ในห้องพูดคุยตอนนี้นะเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-                        }
-                    }
-
-                    // --- คำสั่งอื่นๆ: ต้องมีคิวเพลงเมี๊ยว ---
-                    if (!queue) return interaction.reply({ content: '❌ ไม่มีเพลงที่กำลังเล่นอยู่เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-
-                    switch (action) {
-                        case 'pause':
-                            if (queue.paused) {
-                                queue.resume();
-                                // เปลี่ยนปุ่มเป็นรูป Pause (⏸️) คืน
-                                const rows = interaction.message.components.map(row => {
-                                    const newRow = ActionRowBuilder.from(row);
-                                    newRow.components.forEach(btn => {
-                                        if (btn.data.custom_id === 'music_pause') btn.setEmoji('⏸️').setStyle(ButtonStyle.Secondary);
-                                    });
-                                    return newRow;
-                                });
-                                await interaction.update({ components: rows });
-                            } else {
-                                queue.pause();
-                                // เปลี่ยนปุ่มเป็นรูป Play (▶️)
-                                const rows = interaction.message.components.map(row => {
-                                    const newRow = ActionRowBuilder.from(row);
-                                    newRow.components.forEach(btn => {
-                                        if (btn.data.custom_id === 'music_pause') btn.setEmoji('▶️').setStyle(ButtonStyle.Success);
-                                    });
-                                    return newRow;
-                                });
-                                await interaction.update({ components: rows });
-                            }
-                            break;
-                        case 'autoplay':
-                            const autoMode = queue.toggleAutoplay();
-                            const autoRows = interaction.message.components.map(row => {
-                                const newRow = ActionRowBuilder.from(row);
-                                newRow.components.forEach(btn => {
-                                    if (btn.data.custom_id === 'music_autoplay') {
-                                        btn.setStyle(autoMode ? ButtonStyle.Primary : ButtonStyle.Secondary);
-                                    }
-                                });
-                                return newRow;
-                            });
-                            await interaction.update({ components: autoRows });
-                            break;
-                        case 'skip':
-                            try {
-                                await queue.skip();
-                                await interaction.reply({ content: '⏭️ ข้ามเพลงให้แล้วเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-                            } catch {
-                                await interaction.reply({ content: '❌ ไม่มีเพลงถัดไปในคิวเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-                            }
-                            break;
-                        case 'loop':
-                            const mode = queue.repeatMode === 1 ? 0 : 1;
-                            queue.setRepeatMode(mode);
-                            await interaction.reply({ content: `🔁 วนซ้ำเพลงนี้: **${mode === 1 ? 'เปิด' : 'ปิด'}** ให้แล้วนะเมี๊ยว!`, flags: [MessageFlags.Ephemeral] });
-                            break;
-                        case 'mute':
-                            const muteVol = queue.volume === 0 ? 50 : 0;
-                            queue.setVolume(muteVol);
-                            
-                            // อัปเดตปุ่มและ Embed ทันทีเมี๊ยว🐾
-                            const muteRows = interaction.message.components.map(row => {
-                                const newRow = ActionRowBuilder.from(row);
-                                newRow.components.forEach(btn => {
-                                    if (btn.data.custom_id === 'music_mute') {
-                                        btn.setEmoji(muteVol === 0 ? '🔇' : '🔊').setStyle(ButtonStyle.Secondary);
-                                    }
-                                });
-                                return newRow;
-                            });
-
-                            const muteEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
-                            const fieldIdx = muteEmbed.data.fields.findIndex(f => f.name.includes('ระดับเสียง'));
-                            if (fieldIdx !== -1) muteEmbed.data.fields[fieldIdx].value = `${muteVol}%`;
-
-                            await interaction.update({ embeds: [muteEmbed], components: muteRows });
-                            break;
-                    }
-                } catch (e) {
-                    console.error('Music Button Error:', e);
-                    if (!interaction.replied) await interaction.reply({ content: 'เกิดข้อผิดพลาดในการควบคุมเพลงเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
-                }
-            }
-        }
-
-        // --- จัดการ User Select Menu สำหรับห้องส่วนตัว ---
-        else if (interaction.isUserSelectMenu()) {
-            const { customId, values, user } = interaction;
-            if (customId === 'private_room_invite_select' || customId === 'private_room_kick_select') {
-                const isInvite = customId === 'private_room_invite_select';
-                
-                // บันทึกข้อมูลการเลือกลง Map เมี๊ยว🐾
-                if (!interaction.client.privateRoomConfirm) interaction.client.privateRoomConfirm = new Map();
-                interaction.client.privateRoomConfirm.set(interaction.message.id, values);
-
-                const { UserSelectMenuBuilder } = require('discord.js');
-                const select = new UserSelectMenuBuilder()
-                    .setCustomId(isInvite ? 'private_room_invite_select' : 'private_room_kick_select')
-                    .setPlaceholder(isInvite ? 'เลือกเพื่อนที่ต้องการชวนเมี๊ยว🐾' : 'เลือกเพื่อนที่ต้องการเตะออกเมี๊ยว🐾')
-                    .setMinValues(1)
-                    .setMaxValues(5)
-                    .setDefaultUsers(values);
-
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`private_room_confirm:${isInvite ? 'invite' : 'kick'}`)
-                        .setLabel(isInvite ? 'ยืนยันการเชิญเมี๊ยว🐾' : 'ยืนยันการเตะเมี๊ยว🐾')
-                        .setStyle(isInvite ? ButtonStyle.Success : ButtonStyle.Danger)
-                );
-
-                const selectRow = new ActionRowBuilder().addComponents(select);
-                const userList = values.map(id => `<@${id}>`).join(', ');
-
-                return interaction.update({ 
-                    content: `💡 คุณเลือกเพื่อน ${values.length} คน:\n${userList}\n\n**กดปุ่มด้านล่างเพื่อยืนยัน หรือเลือกใหม่ได้เลยนะเมี๊ยว!**`, 
-                    components: [selectRow, row] 
-                });
+                return interaction.reply({ content: '🗑️ ลบข้อมูล Ticket ออกจากระบบเรียบร้อยแล้วเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
             }
         }
 
@@ -1094,255 +856,123 @@ module.exports = {
         else if (interaction.isModalSubmit()) {
             const { customId, guild, user, fields } = interaction;
 
-            // --- AI Speak: Save Edited Content ---
-            if (customId.startsWith('ai_speak_save:')) {
+            // --- แบบฟอร์มปกติ ---
+            if (customId.startsWith('form_submit:')) {
+                const formId = customId.split(':')[1];
+                const { data: form } = await supabase.from('forms').select('*').eq('id', formId).single();
+                
+                const answers = [];
+                for (let i = 0; i < (form.modal_questions?.length || 0); i++) {
+                    answers.push({ q: form.modal_questions[i], a: fields.getTextInputValue(`form_answer_${i}`) });
+                }
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`📝 แบบฟอร์มใหม่: ${form.title}`)
+                    .setColor(0x3B82F6)
+                    .addFields(
+                        { name: '👤 ผู้ส่ง', value: `<@${user.id}> (${user.tag})` },
+                        ...answers.map(ans => ({ name: ans.q, value: ans.a || '-' }))
+                    )
+                    .setTimestamp();
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`form_approve:${formId}:${user.id}`).setLabel('อนุมัติ').setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId(`form_reject:${formId}:${user.id}`).setLabel('ปฏิเสธ').setStyle(ButtonStyle.Danger)
+                );
+
+                const logChannel = guild.channels.cache.get(form.log_channel_id);
+                if (logChannel) await logChannel.send({ embeds: [embed], components: [row] });
+                
+                return interaction.editReply({ content: '✅ ส่งแบบฟอร์มเรียบร้อยแล้วเมี๊ยวว!🐾 กรุณารอแอดมินตรวจสอบนะเมี๊ยวว' });
+            }
+
+            // --- เปลี่ยนชื่อห้องส่วนตัว ---
+            else if (customId === 'private_room_rename_modal') {
+                const newName = fields.getTextInputValue('private_room_new_name');
+                const cleanName = newName.replace(/[^a-zA-Z0-9ก-๙\s]/g, '').trim();
+                if (!cleanName) return interaction.reply({ content: '❌ ชื่อห้องไม่ถูกต้องเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+
+                await interaction.channel.setName(`🏠-${cleanName}`);
+                return interaction.reply({ content: `📝 เปลี่ยนชื่อห้องเป็น **🏠-${cleanName}** เรียบร้อยแล้วเมี๊ยวว!🐾`, flags: [MessageFlags.Ephemeral] });
+            }
+
+            // --- AI Speak: Save Edit ---
+            else if (customId.startsWith('ai_speak_save:')) {
                 const originalId = customId.split(':')[1];
                 const newContent = fields.getTextInputValue('new_content');
                 const cached = interaction.client.aiSpeakCache?.get(originalId);
 
                 if (!cached) return interaction.reply({ content: '❌ ข้อมูลหมดอายุหรือหาไม่เจอแล้วเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
 
-                // อัปเดต Cache ด้วยข้อความใหม่เมี๊ยว🐾
                 cached.content = newContent;
                 interaction.client.aiSpeakCache.set(originalId, cached);
 
-                // สร้าง Embed ใหม่ที่อัปเดตแล้ว
-                const updatedEmbed = new EmbedBuilder()
-                    .setAuthor({ name: cached.charName, iconURL: cached.charAvatar || null })
-                    .setDescription(newContent)
-                    .setColor(0x8B5CF6)
-                    .setFooter({ text: 'แก้ไขเรียบร้อย! คุณต้องการส่งข้อความนี้ไหมเมี๊ยว?🐾' });
-
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`ai_speak_approve:${originalId}`).setLabel('Approve').setStyle(ButtonStyle.Success).setEmoji('✅'),
-                    new ButtonBuilder().setCustomId(`ai_speak_edit:${originalId}`).setLabel('Edit').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
-                    new ButtonBuilder().setCustomId(`ai_speak_reject:${originalId}`).setLabel('Reject').setStyle(ButtonStyle.Danger).setEmoji('❌')
-                );
-
-                return await interaction.update({ embeds: [updatedEmbed], components: [row] });
+                const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setDescription(newContent);
+                return interaction.update({ embeds: [newEmbed] });
             }
 
-            // --- ขึ้นเพลงมาคิวแรกผ่าน Queue Modal ---
-            if (customId === 'music_queue_jump') {
-                const pickStr = fields.getTextInputValue('music_queue_pick').trim();
-                if (!pickStr) return interaction.deferUpdate().catch(() => {});
-
-                const pickNum = parseInt(pickStr);
-                const queue = interaction.client.distube.getQueue(guild.id);
-                if (!queue || queue.songs.length <= 1) {
-                    return interaction.reply({ content: '❌ คิวเพลงหมดแล้วเมี๊ยว! ไม่มีเพลงให้ย้ายเป็นคิวแรกเรยเมี๊ยว', flags: [MessageFlags.Ephemeral] });
-                }
-
-                if (isNaN(pickNum) || pickNum < 1 || pickNum > 5) {
-                    return interaction.reply({ content: `❌ ใส่ตัวเลข 1-5 เท่านั้นนะเมี๊ยว🐾`, flags: [MessageFlags.Ephemeral] });
-                }
-
-                // ⭐ ใช้ Snapshot ค้นหาเพลงที่ถูกต้องในคิวปัจจุบันเมี๊ยว🐾
-                const snapshotKey = `${guild.id}-${user.id}`;
-                const snapshot = interaction.client._queueSnapshots?.get(snapshotKey);
-
-                // ถ้า Snapshot เก่นกว่า 30 วินาที ให้เตือนเมี๊ยว🐾
-                if (!snapshot || Date.now() - snapshot.timestamp > 30000) {
-                    return interaction.reply({ content: '❌ คิวอาจเปลี่ยนไปแล้วเมี๊ยว! กรุณาเปิดคิวใหม่อีกครั้งนะ🐾', flags: [MessageFlags.Ephemeral] });
-                }
-
-                const targetSong = snapshot.songs[pickNum - 1];
-                if (!targetSong) {
-                    return interaction.reply({ content: `❌ ไม่พบเพลงอันดับ ${pickNum} ในคิวเมี๊ยว!`, flags: [MessageFlags.Ephemeral] });
-                }
-
-                // ค้นหาเพลงจากชื่อจริงในคิวปัจจุบัน (ไม่เชื่อตัวเลขตาบอด)
-                const realIdx = queue.songs.findIndex((s, i) => i > 0 && s.url === targetSong.url);
-                if (realIdx === -1) {
-                    return interaction.reply({ content: '❌ เพลงนี้หลุดออกจากคิวไปแล้วเมี๊ยว (เพลงอาจถูกข้ามหรือเปลี่ยนไประหว่างรอ)🐾', flags: [MessageFlags.Ephemeral] });
-                }
-
-                const [picked] = queue.songs.splice(realIdx, 1);
-                queue.songs.splice(1, 0, picked);
-
-                // ลบ Snapshot หลังใช้งานเมี๊ยว🐾
-                interaction.client._queueSnapshots.delete(snapshotKey);
-
-                return interaction.reply({ content: `✅ ย้าย **${picked.name}** มาเป็นคิวถัดไปแล้วเมี๊ยวว!🐾🌸`, flags: [MessageFlags.Ephemeral] });
-            }
-
-            // --- เพิ่มเพลงผ่าน Popup ---
-            if (customId === 'music_add_submit') {
-                const query = fields.getTextInputValue('music_query_input');
-                const memberVoice = guild.members.cache.get(user.id)?.voice?.channel;
-                if (!memberVoice) return interaction.reply({ content: '❌ คุณต้องเข้าห้องพูดคุย (Voice) ก่อนนะเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-
-                await interaction.deferUpdate().catch(() => interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {}));
-                try {
-                    await interaction.client.distube.play(memberVoice, query, {
-                        textChannel: interaction.channel,
-                        member: guild.members.cache.get(user.id),
-                    });
-                } catch (err) {
-                    await interaction.followUp({ content: `❌ เพิ่มเพลงไม่ได้เมี๊ยว: \`${err.message}\``, flags: [MessageFlags.Ephemeral] });
-                }
-                return;
-            }
-
-            // --- ตั้งค่า Welcome ---
-            if (customId === 'welcome_settings_modal') {
-                const msg = fields.getTextInputValue('welcome_message_input');
-                settings.welcome = { ...settings.welcome, message: msg };
-                await supabase.from('guilds').update({ settings }).eq('id', guild.id);
-                return interaction.reply({ content: '✅ อัปเดตข้อความต้อนรับเรียบร้อยเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-            }
-
-            // --- ตั้งค่า Goodbye ---
-            else if (customId === 'goodbye_settings_modal') {
-                const msg = fields.getTextInputValue('goodbye_message_input');
-                settings.goodbye = { ...settings.goodbye, message: msg };
-                await supabase.from('guilds').update({ settings }).eq('id', guild.id);
-                return interaction.reply({ content: '✅ อัปเดตข้อความบอกลาเรียบร้อยเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
-            }
-
-            // --- ส่งฟอร์มสมัคร ---
-            else if (customId.startsWith('form_submit:')) {
-                // (Deferred at the beginning of interaction)
-                const formId = customId.split(':')[1];
-                
-                try {
-                    const { data: form, error: fetchError } = await supabase.from('forms').select('*').eq('id', formId).single();
-                    if (fetchError || !form) return interaction.editReply({ content: '❌ ไม่พบข้อมูลฟอร์มเมี๊ยว (อาจถูกลบไปแล้ว)' });
-
-                    const questions = form.modal_questions || [];
-                    const QnA = questions.map((q, i) => `**Q: ${q}**\n${fields.getTextInputValue(`form_answer_${i}`)}`).join('\n\n');
-
-                    if (form.mode === 'auto') {
-                        const member = await guild.members.fetch(user.id);
-                        if (form.role_id) await member.roles.add(form.role_id).catch(() => {});
-                        if (form.remove_role_id) await member.roles.remove(form.remove_role_id).catch(() => {});
-                        return interaction.editReply({ content: '✅ อนุมัติและแจกยศให้เรียบร้อยแล้วเมี๊ยวว! (ระบบอัตโนมัติ🐾)' });
-                    } else {
-                        const approveChId = settings?.form?.approve_channel_id;
-                        const channel = guild.channels.cache.get(approveChId);
-                        if (!channel) return interaction.editReply({ content: '❌ ยังไม่ได้ตั้งค่าห้องอนุมัติสำหรับแอดมินเมี๊ยว! (โปรดแจ้งแอดมินให้รัน `/form set` นะเมี๊ยว🐾)' });
-
-                        const embed = new EmbedBuilder()
-                            .setTitle('📝 คำขอรับบทบาทใหม่เมี๊ยว')
-                            .setColor(0xFAB005)
-                            .setThumbnail(user.displayAvatarURL())
-                            .addFields(
-                                { name: 'ผู้ใช้งาน', value: `<@${user.id}>`, inline: true },
-                                { name: 'ID', value: user.id, inline: true }
-                            )
-                            .setDescription(QnA)
-                            .setTimestamp();
-
-                        const row = new ActionRowBuilder().addComponents(
-                            new ButtonBuilder().setCustomId(`form_approve:${formId}:${user.id}`).setLabel('อนุมัติเมี๊ยว').setStyle(ButtonStyle.Success),
-                            new ButtonBuilder().setCustomId(`form_reject:${formId}:${user.id}`).setLabel('ปฏิเสธเมี๊ยว').setStyle(ButtonStyle.Danger)
-                        );
-                        await channel.send({ embeds: [embed], components: [row] });
-                        return interaction.editReply({ content: '✅ ส่งคำขอให้แอดมินตรวจสอบแล้วนะเมี๊ยว รอแป๊บน้าา🐾' });
-                    }
-                } catch (err) {
-                    console.error('Modal submit error:', err);
-                    return interaction.editReply({ content: `งื้อออ เกิดข้อผิดพลาด: \`${err.message}\` 🐾` });
-                }
-            }
-
-            // --- [Ticket] ส่งข้อมูล Ticket ---
+            // --- Ticket: Submit ---
             else if (customId.startsWith('ticket_submit:')) {
                 const [_, pendingId, rejectId, approveId] = customId.split(':');
-                const ticketTitle = fields.getTextInputValue('ticket_title_input');
-                const ticketMessage = fields.getTextInputValue('ticket_message_input');
-                const ticketImage = fields.getTextInputValue('ticket_image_input');
+                const title = fields.getTextInputValue('ticket_title_input');
+                const message = fields.getTextInputValue('ticket_message_input');
+                const imageUrl = fields.getTextInputValue('ticket_image_input');
 
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
-                try {
-                    // 1. บันทึกลง Database
-                    const { data: ticket, error } = await supabase.from('tickets').insert({
+                const { data: ticket, error } = await supabase
+                    .from('tickets')
+                    .insert({
                         guild_id: guild.id,
                         user_id: user.id,
-                        user_tag: user.tag,
-                        title: ticketTitle,
-                        message: ticketMessage,
-                        image_url: ticketImage || null,
-                        admin_channel_id: pendingId, // เริ่มต้นที่ห้อง Pending
+                        title,
+                        message,
+                        image_url: imageUrl || null,
                         pending_channel_id: pendingId,
                         reject_channel_id: rejectId,
                         approve_channel_id: approveId,
                         status: 'Pending'
-                    }).select().single();
+                    })
+                    .select()
+                    .single();
 
-                    if (error) throw error;
+                if (error) return interaction.editReply({ content: `งื้อออ บันทึกข้อมูลไม่สำเร็จเมี๊ยว: ${error.message}` });
 
-                    // 2. ส่งให้ห้อง Pending
-                    const adminChannel = guild.channels.cache.get(pendingId);
-                    if (!adminChannel) return interaction.editReply({ content: '❌ ไม่พบห้องสำหรับแอดมินเมี๊ยว! กรุณาแจ้งแอดมินนะ🐾' });
-
+                // ส่งแจ้งเตือนเข้าห้อง Pending
+                const pendingChannel = guild.channels.cache.get(pendingId);
+                if (pendingChannel) {
                     const embed = new EmbedBuilder()
-                        .setTitle(`🎫 Ticket ใหม่: ${ticketTitle}`)
+                        .setTitle(`🎫 Ticket ใหม่: ${title}`)
                         .setColor(0xFAB005)
                         .setThumbnail(user.displayAvatarURL())
                         .addFields(
-                            { name: 'ผู้ส่ง', value: `<@${user.id}> (${user.tag})`, inline: true },
-                            { name: 'ID ผู้ใช้', value: user.id, inline: true },
+                            { name: '👤 ผู้แจ้ง', value: `<@${user.id}> (${user.tag})`, inline: true },
+                            { name: '🆔 Ticket ID', value: `\`${ticket.id}\``, inline: true },
                             { name: 'สถานะ', value: '🟡 **Pending**', inline: true },
-                            { name: 'รายละเอียด', value: ticketMessage }
+                            { name: '📄 รายละเอียด', value: message }
                         )
                         .setTimestamp();
 
-                    if (ticketImage && ticketImage.startsWith('http')) {
-                        embed.setImage(ticketImage);
-                    }
+                    if (imageUrl && imageUrl.startsWith('http')) embed.setImage(imageUrl);
 
                     const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId(`ticket_status:${ticket.id}:Acknowledge`).setLabel('รับทราบ (Ack)').setStyle(ButtonStyle.Primary),
-                        new ButtonBuilder().setCustomId(`ticket_status:${ticket.id}:Reject`).setLabel('ปฏิเสธ (Reject)').setStyle(ButtonStyle.Danger),
-                        new ButtonBuilder().setCustomId(`ticket_status:${ticket.id}:Done`).setLabel('เสร็จสิ้น (Done)').setStyle(ButtonStyle.Success),
-                        new ButtonBuilder().setCustomId(`ticket_delete:${ticket.id}`).setLabel('ลบ').setStyle(ButtonStyle.Secondary).setEmoji('🗑️')
+                        new ButtonBuilder().setCustomId(`ticket_status:${ticket.id}:Acknowledge`).setLabel('รับเรื่อง').setStyle(ButtonStyle.Primary).setEmoji('👀'),
+                        new ButtonBuilder().setCustomId(`ticket_status:${ticket.id}:Done`).setLabel('เสร็จสิ้น').setStyle(ButtonStyle.Success).setEmoji('✅'),
+                        new ButtonBuilder().setCustomId(`ticket_status:${ticket.id}:Reject`).setLabel('ปฏิเสธ').setStyle(ButtonStyle.Danger).setEmoji('❌')
                     );
 
-                    const adminMsg = await adminChannel.send({ embeds: [embed], components: [row] });
-
-                    // 3. อัปเดต Message ID กลับลง DB
-                    await supabase.from('tickets').update({ admin_message_id: adminMsg.id }).eq('id', ticket.id);
-
-                    return interaction.editReply({ content: '✅ ส่ง Ticket ให้แอดมินเรียบร้อยแล้วเมี๊ยวว! รอการตอบกลับนะ🐾' });
-
-                } catch (err) {
-                    console.error('Ticket Submit Error:', err);
-                    return interaction.editReply({ content: `งื้อออ เกิดข้อผิดพลาดในการส่ง Ticket: \`${err.message}\` 🐾` });
+                    await pendingChannel.send({ embeds: [embed], components: [row] });
                 }
-            }
 
-            // --- [Private Room] เปลี่ยนชื่อห้อง ---
-            else if (customId === 'private_room_rename_modal') {
-                const newName = fields.getTextInputValue('private_room_new_name');
-                const cleanName = newName.replace(/[^a-zA-Z0-9ก-ฮอะ-์]/g, '-').toLowerCase();
-                const finalName = `🏠-${cleanName}`;
-
-                try {
-                    await interaction.channel.setName(finalName);
-                    return interaction.reply({ content: `✅ เปลี่ยนชื่อห้องเป็น **${finalName}** เรียบร้อยแล้วเมี๊ยวว!🐾🌸`, flags: [MessageFlags.Ephemeral] });
-                } catch (err) {
-                    console.error('Error renaming channel via modal:', err);
-                    return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการเปลี่ยนชื่อห้องเมี๊ยว! (อาจจะติด Cooldown ของ Discord นะ🐾)', flags: [MessageFlags.Ephemeral] });
-                }
+                return interaction.editReply({ content: '✅ ส่งข้อมูลแจ้งเรื่องเรียบร้อยแล้วเมี๊ยวว!🐾 ขอบคุณที่แจ้งเข้ามานะเมี๊ยวว' });
             }
         }
-    } catch (error) {
-            console.error('Global Interaction Error:', error);
-            const errorMessage = '❌ เกิดข้อผิดพลาดบางอย่างภายในระบบเมี๊ยว... ลองใหม่อีกครั้งนะเมี๊ยว!';
-            
-            try {
-                if (interaction.isAutocomplete()) return;
-                if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ content: errorMessage, flags: [MessageFlags.Ephemeral] });
-                } else {
-                    await interaction.followUp({ content: errorMessage, flags: [MessageFlags.Ephemeral] });
-                }
-            } catch (e) {
-                // ถ้าส่งข้อความไม่ได้เลย ก็ปล่อยไปเมี๊ยว🐾
-            }
+        } catch (error) {
+            if (error.code === 10062) return; // Silent on Unknown Interaction
+            console.error('Interaction Error:', error);
+            const errorMsg = { content: `งื้อออ เกิดข้อผิดพลาดเมี๊ยว: \`${error.message}\``, flags: [MessageFlags.Ephemeral] };
+            if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
+            else await interaction.reply(errorMsg).catch(() => {});
         }
-    },
+    }
 };
-
