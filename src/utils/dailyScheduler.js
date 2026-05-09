@@ -3,7 +3,8 @@ const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 dayjs.extend(utc);
 const supabase = require('../supabaseClient');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { getFillSettings, getNextQueueItems, setupAndOpenRoom, closeAndCleanup } = require('./botFillManager');
 
 function initDailyScheduler(client) {
     // รันทุก 1 นาที (สำหรับทดสอบ)
@@ -85,7 +86,127 @@ function initDailyScheduler(client) {
         }
     });
 
-    console.log('✅ Daily Scheduler initialized (Every 5 minutes)');
+    // --- 🤖 ระบบคิวเติมบอทอัตโนมัติ (Tue, Thu, Sat) ---
+    
+    // 1. Setup Phase (17:50) - สร้างห้องและ Summon บอท
+    cron.schedule('50 17 * * 2,4,6', async () => {
+        const guilds = client.guilds.cache;
+        for (const [id, guild] of guilds) {
+            const settings = await getFillSettings(id);
+            if (!settings.enabled) continue;
+
+            const { room1, room2 } = await getNextQueueItems(id);
+            if (room1) await setupAndOpenRoom(guild, 1, room1, settings);
+            if (room2) await setupAndOpenRoom(guild, 2, room2, settings);
+        }
+    });
+
+    // 2. Open Phase (18:00) - เปิดสิทธิ์ให้คนทั่วไป
+    cron.schedule('0 18 * * 2,4,6', async () => {
+        const guilds = client.guilds.cache;
+        for (const [id, guild] of guilds) {
+            const settings = await getFillSettings(id);
+            if (!settings.enabled) continue;
+
+            // ดึงห้องที่กำลังทำงานอยู่
+            const { data: activeQueue } = await supabase
+                .from('bot_fill_queue')
+                .select('*')
+                .eq('guild_id', id)
+                .eq('is_processed', false)
+                .not('active_channel_id', 'is', null);
+
+            if (!activeQueue) continue;
+
+            for (const q of activeQueue) {
+                const channel = await guild.channels.fetch(q.active_channel_id).catch(() => null);
+                if (channel) {
+                    await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                        ViewChannel: true,
+                        SendMessages: true
+                    });
+                    await channel.send('✨ **สถานีเติมบอทเปิดให้บริการแล้วเมี๊ยวว!** 🎮 พิมพ์คุยกับตัวละครได้เลย🐾');
+                }
+            }
+        }
+    });
+
+    // 3. Warning Phase (23:50) - แจ้งเตือนปิดห้อง
+    cron.schedule('50 23 * * 2,4,6', async () => {
+        const guilds = client.guilds.cache;
+        for (const [id, guild] of guilds) {
+            const settings = await getFillSettings(id);
+            if (!settings.enabled) continue;
+
+            const { data: activeQueue } = await supabase
+                .from('bot_fill_queue')
+                .select('*')
+                .eq('guild_id', id)
+                .eq('is_processed', false)
+                .not('active_channel_id', 'is', null);
+
+            if (!activeQueue) continue;
+
+            for (const q of activeQueue) {
+                const channel = await guild.channels.fetch(q.active_channel_id).catch(() => null);
+                if (channel) {
+                    await channel.send('⏰ **ประกาศ:** เหลือเวลาอีก 10 นาที สถานีเติมบอทจะปิดให้บริการแล้วนะเมี๊ยว🐾');
+                }
+            }
+        }
+    });
+
+    // 4. Soft Close (00:00) - ล็อกการพิมพ์ (ต้องรันวันถัดไปคือ Wed, Fri, Sun)
+    cron.schedule('0 0 * * 3,5,0', async () => {
+        const guilds = client.guilds.cache;
+        for (const [id, guild] of guilds) {
+            const settings = await getFillSettings(id);
+            if (!settings.enabled) continue;
+
+            const { data: activeQueue } = await supabase
+                .from('bot_fill_queue')
+                .select('*')
+                .eq('guild_id', id)
+                .eq('is_processed', false)
+                .not('active_channel_id', 'is', null);
+
+            if (!activeQueue) continue;
+
+            for (const q of activeQueue) {
+                const channel = await guild.channels.fetch(q.active_channel_id).catch(() => null);
+                if (channel) {
+                    await channel.permissionOverwrites.edit(guild.roles.everyone, {
+                        SendMessages: false
+                    });
+                    await channel.send('🚫 **หมดเวลาให้บริการแล้วเมี๊ยว🐾** ตอนนี้ดูข้อความได้อย่างเดียวแล้วนะ! ห้องจะถูกลบในอีก 5 นาทีครับ');
+                }
+            }
+        }
+    });
+
+    // 5. Cleanup (00:05) - ลบห้องและเคลียร์ DB (Wed, Fri, Sun)
+    cron.schedule('5 0 * * 3,5,0', async () => {
+        const guilds = client.guilds.cache;
+        for (const [id, guild] of guilds) {
+            const settings = await getFillSettings(id);
+            if (!settings.enabled) continue;
+
+            const { data: activeQueue } = await supabase
+                .from('bot_fill_queue')
+                .select('*')
+                .eq('guild_id', id)
+                .eq('is_processed', false)
+                .not('active_channel_id', 'is', null);
+
+            if (!activeQueue) continue;
+
+            for (const q of activeQueue) {
+                await closeAndCleanup(guild, q);
+            }
+        }
+    });
+
+    console.log('✅ Daily Scheduler initialized (Including Bot Station Schedule)');
 }
 
 module.exports = { initDailyScheduler };

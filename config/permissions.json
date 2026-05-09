@@ -1,5 +1,7 @@
 {
     "adminRoles": ["Administrator"],
     "adminUsers": [],
-    "commands": {}
+    "commands": {
+        "botqueue": "admin"
+    }
 }

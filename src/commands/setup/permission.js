@@ -109,7 +109,7 @@ module.exports = {
             'leveling', 'form', 'ticket', 'send', 'purrpaw', 'speak', 'speak-voice', 
             'ban', 'unban', 'giverole', 'addset', 'daily', 'aichat', 'summary', 
             'fortune', 'mbti', 'sbti', 'rpg', 'private', 'setbg', 'toptier', 
-            'profile', 'music', 'tts', 'scoreboard', 'ping', 'aichat-speak', 'termbot-clean'
+            'profile', 'music', 'tts', 'scoreboard', 'ping', 'aichat-speak', 'termbot-clean', 'botqueue'
         ];
 
         const filtered = commands.filter(c => c.toLowerCase().includes(focusedValue)).slice(0, 25);
