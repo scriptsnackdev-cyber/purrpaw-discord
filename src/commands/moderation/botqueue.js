@@ -143,6 +143,21 @@ module.exports = {
                     current = current.startOf('day');
                 }
 
+                const dayNames = {
+                    'Tue': 'อ.',
+                    'Thu': 'พฤ.',
+                    'Sat': 'ส.'
+                };
+
+                while (sessions.length < count) {
+                    const day = current.day(); // 0=Sun, 1=Mon, 2=Tue...
+                    if ([2, 4, 6].includes(day)) {
+                        const enDay = current.format('ddd');
+                        const thDay = dayNames[enDay] || enDay;
+                        sessions.push(`${thDay} ${current.format('DD/MM/YYYY')}`);
+                    }
+                    current = current.add(1, 'day');
+                }
                 return sessions;
             };
 
