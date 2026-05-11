@@ -10,6 +10,15 @@ function initDailyScheduler(client) {
     // รันทุก 1 นาที (สำหรับทดสอบ)
     cron.schedule('* * * * *', async () => {
         try {
+            // 🧹 ตรวจสอบห้องเสียงเฉพาะกิจเมี๊ยว🐾
+            const { cleanupVoiceRooms } = require('./voiceRoomCleanup');
+            await cleanupVoiceRooms(client);
+
+            // 🧹 ตรวจสอบห้องส่วนตัวเมี๊ยว🐾
+            const { cleanupPrivateRooms, warnPrivateRooms } = require('./privateRoomCleanup');
+            await cleanupPrivateRooms(client);
+            await warnPrivateRooms(client);
+
             // ใช้เวลาไทย (GMT+7)
             const now = dayjs().utcOffset(7);
             const currentTime = now.format('HH:mm');
@@ -29,7 +38,7 @@ function initDailyScheduler(client) {
 
             for (const schedule of schedules) {
                 const scheduleDays = schedule.days.split(',').map(d => d.trim().toUpperCase());
-                
+
                 // เช็คเงื่อนไข:
                 // 1. วันตรง (หรือเป็น ALL)
                 // 2. เวลาปัจจุบัน >= เวลาที่ตั้งไว้
@@ -62,7 +71,7 @@ function initDailyScheduler(client) {
                             const embed = new EmbedBuilder()
                                 .setColor('#ffb6c1') // Pink pastel
                                 .setDescription(randomItem.message);
-                            
+
                             if (randomItem.title) embed.setTitle(randomItem.title);
                             if (randomItem.image_url) embed.setImage(randomItem.image_url);
 
@@ -73,7 +82,7 @@ function initDailyScheduler(client) {
                                 .from('daily_schedules')
                                 .update({ last_run_date: todayDate })
                                 .eq('id', schedule.id);
-                            
+
                             console.log(`[DailyScheduler] Sent message and updated last_run_date for ID: ${schedule.id}`);
                         }
                     } catch (sendError) {
@@ -87,7 +96,7 @@ function initDailyScheduler(client) {
     });
 
     // --- 🤖 ระบบคิวเติมบอทอัตโนมัติ (Tue, Thu, Sat) ---
-    
+
     // 1. Setup Phase (17:50) - สร้างห้องและ Summon บอท
     cron.schedule('50 17 * * 2,4,6', async () => {
         const guilds = client.guilds.cache;

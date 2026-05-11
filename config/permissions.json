@@ -4,6 +4,7 @@
     "commands": {
         "botqueue": "admin",
         "summary": "admin",
-        "translate": "admin"
+        "translate": "admin",
+        "randommbti": "everyone"
     }
 }

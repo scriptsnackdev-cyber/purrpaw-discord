@@ -8,7 +8,7 @@ module.exports = {
         const guild = oldState.guild || newState.guild;
         const member = oldState.member || newState.member;
         if (!member || member.user.bot) return;
-        
+
         // 🚫 เช็คว่าโดนแบนอยู่ไหม (ถ้าโดนแบนจะไม่นับเวลาห้องเสียงเมี๊ยว🐾)
         const { settings } = await getGuildData(guild.id);
         if (settings.ban_role_id && member.roles.cache.has(settings.ban_role_id)) return;
@@ -52,6 +52,28 @@ module.exports = {
                     }
                     await voice.leave();
                 }
+
+                // 🧹 อัปเดตเวลาห้องว่างสำหรับห้องเสียงเฉพาะกิจเมี๊ยว🐾
+                const { data: voiceRoom } = await supabase.from('voice_rooms').select('id').eq('channel_id', oldState.channelId).eq('is_deleted', false).single();
+                if (voiceRoom) {
+                    await supabase.from('voice_rooms').update({ empty_since: new Date().toISOString() }).eq('id', voiceRoom.id);
+                    // แจ้งเตือนเบื้องต้นเมี๊ยว🐾
+                    await oldState.channel.send('🐾 **ห้องว่างแล้วเมี๊ยว!** บอทจะนับถอยหลัง 30 นาที หากไม่มีคนเข้าห้องนี้จะถูกลบอัตโนมัตินะเมี๊ยวว 💨').catch(() => { });
+                }
+            }
+        }
+
+        // ── 🔊 ตรวจสอบถ้ามีคนกลับเข้าห้องเสียงเฉพาะกิจเมี๊ยว🐾 ──
+        if (!oldState.channelId && newState.channelId) {
+            const { data: voiceRoom } = await supabase.from('voice_rooms').select('id').eq('channel_id', newState.channelId).eq('is_deleted', false).single();
+            if (voiceRoom) {
+                // เคลียร์ค่า empty_since เพื่อหยุดการนับถอยหลัง
+                await supabase.from('voice_rooms').update({
+                    empty_since: null,
+                    warning_sent_10: false,
+                    warning_sent_5: false,
+                    warning_sent_1: false
+                }).eq('id', voiceRoom.id);
             }
         }
     }
@@ -89,7 +111,7 @@ async function handleVoiceXP(guild, member, seconds) {
     if (newLevel > oldLevel) {
         // ดึงรางวัลทั้งหมดมาเช็คเมี๊ยว🐾
         const { data: allRewards } = await supabase.from('voice_level_rewards').select('*').eq('guild_id', guild.id).order('level', { ascending: false });
-        
+
         // 1. หารางวัลที่สูงสุดที่เลเวลถึง (รองรับการกระโดดข้ามเลเวลเมี๊ยว🐾)
         const highestReward = allRewards?.find(r => r.level <= newLevel);
         let newRole;
@@ -108,7 +130,7 @@ async function handleVoiceXP(guild, member, seconds) {
                         permissions: [],
                         reason: 'Voice Level Role'
                     });
-                } catch (e) {}
+                } catch (e) { }
             }
         }
 
@@ -121,7 +143,7 @@ async function handleVoiceXP(guild, member, seconds) {
                 return isOldLvlString || isOldReward;
             });
             if (toRemove.size > 0) await member.roles.remove(toRemove);
-        } catch (e) {}
+        } catch (e) { }
 
         // 4. มอบยศใหม่
         if (newRole) {
@@ -144,7 +166,7 @@ async function handleVoiceXP(guild, member, seconds) {
                 const avatarURL = member.displayAvatarURL({ extension: 'png', size: 256 });
                 const imageBuffer = await generateLevelUpCard(member.user, newLevel, 'Voice', newRole?.name, member.displayName, avatarURL, customBgURL);
                 const attachment = new AttachmentBuilder(imageBuffer, { name: `voice-levelup-${member.id}.png` });
-                
+
                 await channel.send({
                     content: `🎙️ **ยินดีด้วยเมี๊ยววว! <@${member.id}> เลเวลห้องเสียงอัปแล้ว!** 🐾🌸`,
                     files: [attachment]
