@@ -24,7 +24,7 @@ function startDashboard(client) {
 
         try {
             const { data, error } = await supabase.from('user_mbti_sessions')
-                .select('id, expires_at')
+                .select('id, expires_at, type')
                 .eq('id', sessionId)
                 .single();
 
@@ -33,7 +33,8 @@ function startDashboard(client) {
                 return res.status(403).send('⏰ Session Expired: ลิงก์นี้หมดอายุแล้วเมี๊ยว! กรุณากดปุ่มใหม่จาก Discord นะ🐾');
             }
 
-            res.sendFile(path.join(__dirname, 'mbti.html'));
+            const fileName = data.type === 'sbti' ? 'sbti.html' : 'mbti.html';
+            res.sendFile(path.join(__dirname, fileName));
         } catch (err) {
             res.status(500).send('งื้อออ เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์เมี๊ยว🐾');
         }
