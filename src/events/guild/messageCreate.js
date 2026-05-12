@@ -642,7 +642,7 @@ ${roomStatusXml}`;
                     if (resp.imagePrompt) {
                         const { generateImageAI } = require('../../utils/aiProvider');
                         
-                        // เช็ค Cooldown การสร้างรูป (เช่น 5 นาทีต่อห้อง)
+                        // เช็ค Cooldown การสร้างรูป (เช่น 2 นาทีต่อห้อง)
                         if (!message.client.imageCooldowns) message.client.imageCooldowns = new Map();
                         const lastImage = message.client.imageCooldowns.get(message.channelId) || 0;
                         const now = Date.now();
@@ -651,22 +651,36 @@ ${roomStatusXml}`;
                             message.client.imageCooldowns.set(message.channelId, now);
                             
                             (async () => {
+                                let loadingMsg = null;
                                 try {
                                     const { AttachmentBuilder } = require('discord.js');
-                                    // แจ้งว่ากำลังวาดรูป
-                                    // await message.channel.send(`🎨 **${charProfile.name}** กำลังวาดรูปให้รอสักครู่นะเมี๊ยว...`).catch(() => {});
                                     
+                                    // 1. ส่งข้อความแจ้งเตือนเบื้องต้นก่อนโดยใช้ Webhook ของตัวละครเมี๊ยว🐾
+                                    loadingMsg = await webhook.send({
+                                        content: "(กำลังส่งรูป...)",
+                                        username: charProfile.name,
+                                        avatarURL: charProfile.image_url || null,
+                                        wait: true // สำคัญ: ต้องรอเพื่อให้ได้ Message Object มาแก้ไขเมี๊ยว🐾
+                                    });
+
                                     const imageBuffer = await generateImageAI(resp.imagePrompt, charProfile.image_url);
                                     if (imageBuffer) {
                                         const attachment = new AttachmentBuilder(imageBuffer, { name: 'generated-image.png' });
-                                        await webhook.send({
-                                            files: [attachment],
-                                            username: charProfile.name,
-                                            avatarURL: charProfile.image_url || null
+                                        
+                                        // 2. เมื่อรูปเสร็จแล้ว แก้ไขข้อความเดิมเป็นรูปภาพแทนเมี๊ยว🐾
+                                        await loadingMsg.edit({
+                                            content: "", // ล้างข้อความ "(กำลังส่งรูป...)"
+                                            files: [attachment]
                                         });
+                                    } else {
+                                        // กรณีวาดไม่สำเร็จเมี๊ยว🐾
+                                        await loadingMsg.edit({ content: "🐾 *งื้อออ วาดรูปไม่สำเร็จเมี๊ยว...*" }).catch(() => {});
                                     }
                                 } catch (err) {
                                     console.error('[Image Gen Error]', err);
+                                    if (loadingMsg) {
+                                        await loadingMsg.edit({ content: "🐾 *เกิดข้อผิดพลาดในการวาดรูปเมี๊ยว...*" }).catch(() => {});
+                                    }
                                 }
                             })();
                         } else {
