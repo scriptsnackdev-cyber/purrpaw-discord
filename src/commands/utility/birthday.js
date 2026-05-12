@@ -60,7 +60,7 @@ module.exports = {
             // เพิ่มตัวละครที่ชอบเมี๊ยว🐾
             const favText = b.favorite_characters ? `\n   ╰ ตัวละครที่ชอบ: *${b.favorite_characters}*` : "";
 
-            listText += `**วันที่ ${day}**: ${displayName}${nickName}${favText}\n`;
+            listText += `**วันที่ ${day}**: <@${b.user_id}>${nickName}${favText}\n`;
         }
 
         embed.addFields({ name: '✨ รายชื่อ', value: listText || 'ไม่มีข้อมูล' });

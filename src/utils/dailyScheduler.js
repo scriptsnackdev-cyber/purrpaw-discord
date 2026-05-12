@@ -215,7 +215,59 @@ function initDailyScheduler(client) {
         }
     });
 
-    console.log('✅ Daily Scheduler initialized (Including Bot Station Schedule)');
+    // --- 🎂 ระบบแจ้งเตือนวันเกิดล่วงหน้า 1 วัน (ทุกวัน 08:00 น.) เมี๊ยว🐾 ---
+    cron.schedule('0 8 * * *', async () => {
+        try {
+            const tomorrow = dayjs().utcOffset(7).add(1, 'day');
+            const searchDate = tomorrow.format('DD/MM');
+            
+            const { data: bdays, error } = await supabase
+                .from('user_introductions')
+                .select('guild_id, user_id, birth_date, message_introduction, message_bot_introduction, message_birthday, favorite_characters')
+                .like('birth_date', `${searchDate}/%`);
+
+            if (error || !bdays || bdays.length === 0) return;
+
+            const notifyChannelId = '1502306005218885732';
+            
+            for (const b of bdays) {
+                try {
+                    const channel = await client.channels.fetch(notifyChannelId).catch(() => null);
+                    if (channel) {
+                        const content = b.message_bot_introduction || b.message_birthday || b.message_introduction || "";
+                        const nameMatch = content.match(/ชื่อ\s*[:：]\s*([^\n]+)/);
+                        const nickName = nameMatch ? nameMatch[1].trim() : "ลูกแมวเหมียว";
+
+                        const embed = new EmbedBuilder()
+                            .setTitle('🔔 แจ้งเตือนวันเกิดพรุ่งนี้เมี๊ยว🐾')
+                            .setColor('#FF69B4') // Hot Pink
+                            .setDescription(`พรุ่งนี้เป็นวันเกิดของ **${nickName}** (<@${b.user_id}>) แล้วนะเมี๊ยว! ✨🎂`)
+                            .addFields(
+                                { name: '📅 วันที่เกิด', value: `\`${b.birth_date}\``, inline: true },
+                                { name: '✨ ตัวละครที่ชอบ', value: b.favorite_characters || 'ไม่มีข้อมูล', inline: true }
+                            )
+                            .setThumbnail('https://cdn-icons-png.flaticon.com/512/3132/3132693.png') // รูปเค้ก
+                            .setFooter({ text: 'อย่าลืมเตรียมคำอวยพรไว้รอนะเมี๊ยว🐾' })
+                            .setTimestamp();
+
+                        await channel.send({ 
+                            content: `🎉 **พรุ่งนี้วันเกิด <@${b.user_id}> นะเมี๊ยว!**`, 
+                            embeds: [embed] 
+                        });
+                        console.log(`[Birthday Notifier] Sent notification for ${b.user_id}`);
+                    }
+                } catch (sendErr) {
+                    console.error(`[Birthday Notifier] Failed to send notification for ${b.user_id}:`, sendErr);
+                }
+            }
+        } catch (err) {
+            console.error('[Birthday Notifier] Error:', err);
+        }
+    }, {
+        timezone: "Asia/Bangkok"
+    });
+
+    console.log('✅ Daily Scheduler initialized (Including Birthday & Bot Station Schedule)');
 }
 
 module.exports = { initDailyScheduler };
