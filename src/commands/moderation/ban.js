@@ -48,10 +48,7 @@ module.exports = {
                 return interaction.reply({ content: '❌ ไม่พบสมาชิกคนนี้ในเซิร์ฟเวอร์เมี๊ยว🐾', ephemeral: true });
             }
 
-            // เช็คว่าแบนตัวเองไม่ได้เมี๊ยว🐾
-            if (targetUser.id === interaction.user.id) {
-                return interaction.reply({ content: '❌ จะแบนตัวเองทำไมเมี๊ยวว! ไม่ดื้อนะ🐾', ephemeral: true });
-            }
+
 
             // เช็คว่าแบนคนที่มีลำดับยศสูงกว่าไม่ได้
             if (!targetUser.manageable) {
