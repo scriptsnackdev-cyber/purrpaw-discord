@@ -39,8 +39,16 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            overflow-x: hidden;
+            overflow: hidden;
             position: relative;
+        }
+
+        /* ── Stars Background ── */
+        .stars-canvas {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
         }
 
         /* ── Smoke / Fog Canvas ── */
@@ -181,7 +189,7 @@
             -webkit-backdrop-filter: blur(24px);
             border: 1px solid var(--border);
             border-radius: 28px;
-            padding: 44px 40px;
+            padding: 32px 30px;
             box-shadow:
                 0 0 0 1px rgba(255, 255, 255, 0.03) inset,
                 0 32px 80px rgba(0, 0, 0, 0.7),
@@ -552,9 +560,9 @@
 
         .result-image {
             width: 100%;
-            max-width: 260px;
-            border-radius: 20px;
-            margin: 0 auto 24px;
+            max-width: 200px;
+            border-radius: 16px;
+            margin: 0 auto 16px;
             display: none;
             box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(244, 114, 182, 0.2), 0 0 40px rgba(244, 114, 182, 0.08);
         }
@@ -562,13 +570,13 @@
         .result-description {
             background: rgba(244, 114, 182, 0.04);
             border: 1px solid rgba(244, 114, 182, 0.12);
-            border-radius: 16px;
-            padding: 20px;
-            line-height: 1.8;
-            font-size: 0.95rem;
+            border-radius: 12px;
+            padding: 16px;
+            line-height: 1.6;
+            font-size: 0.9rem;
             color: rgba(220, 190, 255, 0.8);
             text-align: left;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             position: relative;
             z-index: 2;
         }
@@ -675,6 +683,7 @@
 <body>
     <!-- Background -->
     <canvas class="smoke-canvas" id="smokeCanvas"></canvas>
+    <canvas class="stars-canvas" id="starsCanvas"></canvas>
     <div class="orb orb-1"></div>
     <div class="orb orb-2"></div>
     <div class="orb orb-3"></div>
@@ -798,6 +807,47 @@
         createParticles();
         requestAnimationFrame(drawParticles);
         window.addEventListener('resize', () => { resizeCanvas(); createParticles(); });
+
+        /* ── Stars Canvas ── */
+        const sCanvas = document.getElementById('starsCanvas');
+        const sCtx = sCanvas.getContext('2d');
+        let stars = [];
+
+        function resizeStars() {
+            sCanvas.width = window.innerWidth;
+            sCanvas.height = window.innerHeight;
+        }
+
+        function createStars() {
+            stars = [];
+            for (let i = 0; i < 120; i++) {
+                stars.push({
+                    x: Math.random() * sCanvas.width,
+                    y: Math.random() * sCanvas.height,
+                    r: Math.random() * 1.1 + 0.2,
+                    alpha: Math.random(),
+                    speed: Math.random() * 0.008 + 0.002,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+        }
+
+        function drawStars(t) {
+            sCtx.clearRect(0, 0, sCanvas.width, sCanvas.height);
+            stars.forEach(s => {
+                const a = 0.2 + 0.5 * Math.sin(s.phase + t * s.speed);
+                sCtx.beginPath();
+                sCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                sCtx.fillStyle = `rgba(220, 230, 255, ${a})`;
+                sCtx.fill();
+            });
+            requestAnimationFrame(() => drawStars(performance.now() * 0.05));
+        }
+
+        resizeStars();
+        createStars();
+        drawStars(0);
+        window.addEventListener('resize', () => { resizeStars(); createStars(); });
 
         /* ── APP LOGIC (unchanged) ── */
         const urlParams = new URLSearchParams(window.location.search);
