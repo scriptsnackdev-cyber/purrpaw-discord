@@ -19,7 +19,7 @@ module.exports = {
         // รูปแบบเก็บเป็น DD/MM/YYYY ดังนั้นเราจะหาที่มี /MM/
         const { data: bdays, error } = await supabase
             .from('user_introductions')
-            .select('user_id, birth_date, message_introduction, message_bot_introduction, message_birthday')
+            .select('user_id, birth_date, message_introduction, message_bot_introduction, message_birthday, favorite_characters')
             .eq('guild_id', interaction.guild.id)
             .like('birth_date', `%/${currentMonth}/%`);
 
