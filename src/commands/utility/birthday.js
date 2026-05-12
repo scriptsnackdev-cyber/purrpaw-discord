@@ -56,8 +56,11 @@ module.exports = {
             const content = b.message_bot_introduction || b.message_birthday || b.message_introduction || "";
             const nameMatch = content.match(/ชื่อ\s*[:：]\s*([^\n]+)/);
             const nickName = nameMatch ? ` (${nameMatch[1].trim()})` : "";
+            
+            // เพิ่มตัวละครที่ชอบเมี๊ยว🐾
+            const favText = b.favorite_characters ? `\n   ╰ ตัวละครที่ชอบ: *${b.favorite_characters}*` : "";
 
-            listText += `**วันที่ ${day}**: ${displayName}${nickName}\n`;
+            listText += `**วันที่ ${day}**: ${displayName}${nickName}${favText}\n`;
         }
 
         embed.addFields({ name: '✨ รายชื่อ', value: listText || 'ไม่มีข้อมูล' });
