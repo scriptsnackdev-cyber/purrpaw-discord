@@ -618,6 +618,31 @@
             transform: none;
         }
 
+        .retry-btn {
+            width: 100%;
+            padding: 18px 32px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            font-family: 'Sarabun', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 500;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--muted);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .retry-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--pink);
+            color: var(--text);
+            box-shadow: 0 4px 20px rgba(244, 114, 182, 0.15);
+        }
+
         /* ── Footer ── */
         .cat-footer {
             text-align: center;
@@ -710,7 +735,10 @@
             </div>
             <img id="result-image" class="result-image" src="" alt="Result">
             <div class="result-description" id="result-description"></div>
-            <button id="share-btn" class="share-btn">✨ แชร์ผลลัพธ์ไปที่ Discord</button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 30px;">
+                <button id="retry-btn" class="retry-btn">🔄 ทำใหม่อีกครั้ง</button>
+                <button id="share-btn" class="share-btn" style="margin-top:0;">✨ แชร์ผลลัพธ์</button>
+            </div>
         </div>
 
         <div class="cat-footer">PURRPAW AI — SECRET PERSONALITY 🖤</div>
@@ -902,6 +930,13 @@
                         btn.disabled = false;
                         setTimeout(() => { btn.innerText = originalText; }, 3000);
                     }
+                };
+
+                document.getElementById('retry-btn').onclick = () => {
+                    currentIdx = 0;
+                    sbtiScores = {};
+                    document.getElementById('result-screen').classList.add('hidden');
+                    showQuiz();
                 };
             } catch (err) {
                 console.error(err);

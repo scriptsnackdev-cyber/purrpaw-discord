@@ -276,25 +276,9 @@ const { cleanupExpiredBans } = require('./utils/banManager');
 const { REST, Routes } = require('discord.js');
 
 client.once('clientReady', async () => {
-    // 🚀 เริ่มทำงาน Dashboard UI เมี๊ยว🐾
-    const { startDashboard, formatMessage } = require('./dashboard/server');
-    startDashboard(client);
-
-    // ── Real-time Dashboard Updates ──
-    client.on('messageCreate', (message) => {
-        if (client.dashboardIo) {
-            client.dashboardIo.to(message.channel.id).emit('new_message', formatMessage(message));
-        }
-    });
-
-    client.on('voiceStateUpdate', (oldState, newState) => {
-        if (client.dashboardIo && newState.guild.id) {
-            // Tell dashboard to refresh channels for this guild
-            client.dashboardIo.emit('voice_update', newState.guild.id);
-        }
-    });
-
     console.log(`✅ บอทออนไลน์แล้วเมี๊ยว: ${client.user.tag}`);
+
+
     
     // 🚀 ระบบอัปเดตคำสั่งอัตโนมัติเมี๊ยว🐾
     try {
