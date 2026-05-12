@@ -18,7 +18,7 @@ module.exports = {
                 .setDescription('🚫 ปิดใช้งานระบบ MBTI ในเซิร์ฟเวอร์นี้ (Admin เท่านั้นเมี๊ยว)'))
         .addSubcommand(sub =>
             sub.setName('start')
-                .setDescription('🧠 เริ่มทำแบบทดสอบ MBTI 12 ข้อทันทีเมี๊ยว!')),
+                .setDescription('🧠 เริ่มทำแบบทดสอบ MBTI 20 ข้อทันทีเมี๊ยว!')),
 
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
@@ -39,7 +39,7 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setTitle('🧠 PurrPaw MBTI Test')
-                .setDescription('🐾 **คุณเป็นแมวบุคลิกไหนกันแน่เมี๊ยว?**\nมาลองทำแบบทดสอบสั้นๆ 12 ข้อเพื่อค้นหาบุคลิกที่แท้จริงของคุณกัน!\n\n*กดปุ่มด้านล่างเพื่อเริ่มทำแบบทดสอบ*')
+                .setDescription('🐾 **คุณเป็นแมวบุคลิกไหนกันแน่เมี๊ยว?**\nมาลองทำแบบทดสอบสั้นๆ 20 ข้อเพื่อค้นหาบุคลิกที่แท้จริงของคุณกัน!\n\n*กดปุ่มด้านล่างเพื่อเริ่มทำแบบทดสอบ*')
                 .setColor(0x3B82F6)
                 .setImage(randomCover)
                 .setFooter({ text: 'ค้นหาตัวตนของคุณผ่านอุ้งเท้าวิเศษ... ✨' });
@@ -47,7 +47,7 @@ module.exports = {
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId('mbti_start')
-                    .setLabel('🧠 เริ่มทำแบบทดสอบ (12 ข้อ)')
+                    .setLabel('🧠 เริ่มทำแบบทดสอบ (20 ข้อ)')
                     .setStyle(ButtonStyle.Primary)
             );
 
@@ -146,12 +146,13 @@ async function startTest(interaction) {
                 components: getRows(currentIdx)
             });
         } else {
-            // คำนวณผลลัพธ์: ถ้า score >= 0 จะได้ตัวอักษรแรก (E/S/T/J) ถ้า < 0 จะได้ตัวตรงข้าม (I/N/F/P)
+            // คำนวณผลลัพธ์: ถ้า score > 0 จะได้ตัวอักษรแรก (E/S/T/J) ถ้า <= 0 จะได้ตัวตรงข้าม (I/N/F/P)
+            // การใช้ > 0 แทน >= 0 เพื่อช่วยลด bias ที่คนมักจะได้ Sensing ทั้งที่เป็น Intuition (เพราะ 0 จะกลายเป็น N)
             const mbti = [
-                scores.E >= 0 ? 'E' : 'I',
-                scores.S >= 0 ? 'S' : 'N',
-                scores.T >= 0 ? 'T' : 'F',
-                scores.J >= 0 ? 'J' : 'P'
+                scores.E > 0 ? 'E' : 'I',
+                scores.S > 0 ? 'S' : 'N',
+                scores.T > 0 ? 'T' : 'F',
+                scores.J > 0 ? 'J' : 'P'
             ].join('');
 
             await i.update({
@@ -185,7 +186,7 @@ async function startTest(interaction) {
             const resultRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId('mbti_start')
-                    .setLabel('🧠 เริ่มทำแบบทดสอบบ้าง (12 ข้อ)')
+                    .setLabel('🧠 เริ่มทำแบบทดสอบบ้าง (20 ข้อ)')
                     .setStyle(ButtonStyle.Primary)
             );
 
