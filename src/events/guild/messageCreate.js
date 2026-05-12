@@ -24,13 +24,92 @@ module.exports = {
             }
         }
 
+        // ── 📝 ระบบบันทึกการแนะนำตัวและวันเกิดอัตโนมัติ (Auto Intro & Birthday Tracking) ──
+        const introChannelId = settings.ai_chat?.intro_channel_id || '1482445140810399928';
+        const botIntroChannelId = '1486316042824188025';
+        const birthdayChannelId = settings.ai_chat?.birthday_channel_id || '1503011148545396897';
+
+        const isIntro = message.channel.id === introChannelId;
+        const isBotIntro = message.channel.id === botIntroChannelId;
+        const isBirthday = message.channel.id === birthdayChannelId;
+
+        if ((isIntro || isBotIntro || isBirthday) && message.content.length > 5) {
+            (async () => {
+                const content = message.content;
+                const updateData = {
+                    guild_id: message.guild.id,
+                    user_id: message.author.id,
+                    message: content // ส่งลงคอลัมน์เก่าด้วยเมี๊ยว🐾
+                };
+
+                if (isIntro) updateData.message_introduction = content;
+                if (isBotIntro) updateData.message_bot_introduction = content;
+                if (isBirthday) updateData.message_birthday = content;
+
+                // ถ้าเป็นห้องวันเกิด ให้แกะข้อมูลเพิ่มเมี๊ยว🐾
+                if (isBirthday) {
+                    const birthDateMatch = content.match(/วัน\/เดือน\/ปี\s*เกิด\s*[:：]\s*([^\n]+)/i);
+                    const favCharsMatch = content.match(/ตัวละครที่ชอบ\s*[:：]\s*([^\n]+)/i);
+
+                    if (birthDateMatch) {
+                        let rawDate = birthDateMatch[1].trim();
+                        const monthMap = {
+                            'มกราคม': '01', 'ม.ค.': '01', 'january': '01', 'jan': '01',
+                            'กุมภาพันธ์': '02', 'ก.พ.': '02', 'february': '02', 'feb': '02',
+                            'มีนาคม': '03', 'ม.ค.': '03', 'march': '03', 'mar': '03',
+                            'เมษายน': '04', 'เม.ย.': '04', 'april': '04', 'apr': '04',
+                            'พฤษภาคม': '05', 'พ.ค.': '05', 'may': '05',
+                            'มิถุนายน': '06', 'มิ.ย.': '06', 'june': '06', 'jun': '06',
+                            'กรกฎาคม': '07', 'ก.ค.': '07', 'july': '07', 'jul': '07',
+                            'สิงหาคม': '08', 'ส.ค.': '08', 'august': '08', 'aug': '08',
+                            'กันยายน': '09', 'ก.ย.': '09', 'september': '09', 'sep': '09',
+                            'ตุลาคม': '10', 'ต.ค.': '10', 'october': '10', 'oct': '10',
+                            'พฤศจิกายน': '11', 'พ.ย.': '11', 'november': '11', 'nov': '11',
+                            'ธันวาคม': '12', 'ธ.ค.': '12', 'december': '12', 'dec': '12'
+                        };
+
+                        const dateParts = rawDate.split(/[\s\/\-]+/).filter(p => p.length > 0);
+                        if (dateParts.length === 3) {
+                            let day = dateParts[0].padStart(2, '0');
+                            let monthPart = dateParts[1].toLowerCase();
+                            let month = monthMap[monthPart] || monthMap[monthPart + '.'] || monthPart.padStart(2, '0');
+                            let year = parseInt(dateParts[2]);
+
+                            if (!isNaN(year)) {
+                                if (year > 2400) {
+                                    year = year - 543;
+                                } else if (year < 100) {
+                                    if (year <= 26) {
+                                        year = 2000 + year;
+                                    } else if (year <= 70) {
+                                        year = (2500 + year) - 543;
+                                    } else {
+                                        year = 1900 + year;
+                                    }
+                                }
+                                updateData.birth_date = `${day}/${month}/${year}`;
+                            } else {
+                                updateData.birth_date = rawDate;
+                            }
+                        } else {
+                            updateData.birth_date = rawDate;
+                        }
+                    }
+                    if (favCharsMatch) updateData.favorite_characters = favCharsMatch[1].trim();
+                }
+
+                const { error: upsertError } = await supabase.from('user_introductions').upsert(updateData, { onConflict: 'guild_id, user_id' });
+                if (upsertError) console.error('Auto Intro/Birthday Track Error:', upsertError);
+            })();
+        }
+
         // ── 📝 ระบบบันทึก Log ห้องส่วนตัว (Private Room Logging) ──
         if (message.channel.name?.startsWith('🏠-')) {
             if (!message.client.privateRoomCache) message.client.privateRoomCache = new Map();
             let roomCache = message.client.privateRoomCache.get(message.channelId);
             const now = Date.now();
             let room = null;
-            
+
             if (roomCache && (now - roomCache.timestamp < 60000)) {
                 room = roomCache.data;
             } else {
@@ -58,7 +137,7 @@ module.exports = {
                         const logsToFlush = new Map(message.client.privateRoomLogs);
                         message.client.privateRoomLogs.clear();
                         message.client.privateRoomLogTimer = null;
-                        
+
                         for (const [rId, logs] of logsToFlush) {
                             supabase.rpc('append_private_room_log', { room_id: rId, new_log: logs }).then(({ error }) => {
                                 if (error) {
@@ -69,7 +148,7 @@ module.exports = {
                                         }
                                     });
                                 }
-                            }).catch(() => {});
+                            }).catch(() => { });
                         }
                     }, 5000);
                 }
@@ -88,7 +167,7 @@ module.exports = {
 
             if (chatCharCount > 0 && (now - lastXP > 60000)) {
                 message.client.xpCooldowns.set(cooldownKey, now);
-                
+
                 // 🚀 อัปเดตแบบไม่รอ (Non-blocking) เพื่อไม่ให้ขัดจังหวะการแชทเมี๊ยว🐾
                 (async () => {
                     try {
@@ -128,26 +207,26 @@ module.exports = {
 
                             const rewardRoleIds = allRewards ? allRewards.map(role => role.role_id) : [];
                             if (rewardRoleIds.length > 0) {
-                                const rolesToRemove = message.member.roles.cache.filter(role => 
+                                const rolesToRemove = message.member.roles.cache.filter(role =>
                                     rewardRoleIds.includes(role.id) && (newRole ? role.id !== newRole.id : true)
                                 );
-                                if (rolesToRemove.size > 0) await message.member.roles.remove(rolesToRemove).catch(() => {});
+                                if (rolesToRemove.size > 0) await message.member.roles.remove(rolesToRemove).catch(() => { });
                             }
 
-                            if (newRole) await message.member.roles.add(newRole).catch(() => {});
-                            
+                            if (newRole) await message.member.roles.add(newRole).catch(() => { });
+
                             const { generateLevelUpCard } = require('../../utils/levelCard');
                             const { AttachmentBuilder } = require('discord.js');
-                            
+
                             const displayName = message.member?.displayName || message.author.username;
                             const avatarURL = message.member?.displayAvatarURL({ extension: 'png', size: 256 }) || message.author.displayAvatarURL({ extension: 'png', size: 256 });
                             const imageBuffer = await generateLevelUpCard(message.author, newLevel, 'Chat', roleName, displayName, avatarURL, settings.rank_background_url);
                             const attachment = new AttachmentBuilder(imageBuffer, { name: `levelup-${message.author.id}.png` });
-                            
-                            await message.reply({ 
+
+                            await message.reply({
                                 content: `🎊 **ยินดีด้วยนะ! <@${message.author.id}> เลเวลอัพแล้ว!** 🐾✨`,
-                                files: [attachment] 
-                            }).catch(() => {});
+                                files: [attachment]
+                            }).catch(() => { });
                         }
                     } catch (e) { console.error('Leveling error (silenced):', e); }
                 })();
@@ -185,10 +264,10 @@ module.exports = {
             };
             message.client.aiChatQueues.set(message.channelId, queueState);
         }
-        
+
         // อัปเดต Context ของข้อความล่าสุดเสมอเมี๊ยว🐾
         queueState.lastMessage = message;
-        
+
         const isMentioned = message.mentions.has(message.client.user) || message.content.includes(`<@${message.client.user.id}>`);
         if (isMentioned) {
             queueState.isBotMentioned = true;
@@ -221,7 +300,7 @@ module.exports = {
                 if (!message.client.sessionCache) message.client.sessionCache = new Map();
                 let session = message.client.sessionCache.get(channelId)?.data;
                 const sessionCacheTime = message.client.sessionCache.get(channelId)?.timestamp || 0;
-                
+
                 if (Date.now() - sessionCacheTime > 60000) {
                     const { data } = await supabase.from('ai_chat_sessions').select('user_id').eq('channel_id', channelId).eq('is_deleted', false).single();
                     session = data;
@@ -229,7 +308,7 @@ module.exports = {
                 }
 
                 const targetUserId = session ? session.user_id : latestMsg.author.id;
-                
+
                 let targetMember = null;
                 if (session) {
                     targetMember = await guild.members.fetch(targetUserId).catch(() => null);
@@ -239,9 +318,9 @@ module.exports = {
                 const characterIds = activeChats.map(c => c.character_id);
                 const characterProfiles = [];
                 const idsToFetch = [];
-                
+
                 if (!message.client.aiCharCache) message.client.aiCharCache = new Map();
-                
+
                 for (const cId of characterIds) {
                     const cached = message.client.aiCharCache.get(cId);
                     if (cached && Date.now() - cached.timestamp < 300000) {
@@ -258,7 +337,7 @@ module.exports = {
                         .in('id', idsToFetch);
 
                     if (profileError || !fetchedChars) return;
-                    
+
                     fetchedChars.forEach(char => {
                         message.client.aiCharCache.set(char.id, { data: char, timestamp: Date.now() });
                         characterProfiles.push(char);
@@ -283,13 +362,13 @@ module.exports = {
                 // --- 🚀 FAST AI MODE: SKIP PRE-CHECK 🚀 ---
                 // ส่งรายชื่อตัวละครทั้งหมดไปให้ AI ตัดสินใจเองในรอบเดียวเมี๊ยว🐾
                 let activeCharNames = characterProfiles.map(c => c.name);
-                
+
                 // 🚀 เริ่มแจ้ง Typing ทันทีเพื่อความลื่นไหลเมี๊ยว🐾
-                await latestMsg.channel.sendTyping().catch(() => {});
+                await latestMsg.channel.sendTyping().catch(() => { });
                 typingInterval = setInterval(() => {
-                    latestMsg.channel.sendTyping().catch(() => {});
+                    latestMsg.channel.sendTyping().catch(() => { });
                 }, 5000);
-                
+
                 // ข้ามการเรียก checkShouldRespondAI เดิม
                 /* 
                 if (queueState.isBotMentioned || isPrivateRoom) { ... }
@@ -301,15 +380,34 @@ module.exports = {
                 const filteredProfiles = characterProfiles;
                 // --------------------------
 
-                // 5. ดึงข้อมูลการแนะนำตัว (Introductions)
+                // 5. ดึงข้อมูลการแนะนำตัว (Introductions) จาก Supabase 🚀
                 let usersContextXml = "<users_context>\n";
-                const introChId = settings.ai_chat?.intro_channel_id;
-                const backupIntroChId = settings.ai_chat?.intro_backup_channel_id;
-
-                const foundIntroUserIds = new Set();
                 const userNamesMap = new Map();
                 const userIntrosMap = new Map();
 
+                // ดึงข้อมูลลูกบ้านทุกคนที่มีส่วนร่วมในแชทล่าสุดจาก Supabase เมี๊ยว🐾
+                const userIdsToFetch = Array.from(activeUserIds);
+                const { data: dbIntros } = await supabase
+                    .from('user_introductions')
+                    .select('user_id, message_introduction, message_bot_introduction, message_birthday, birth_date, favorite_characters')
+                    .eq('guild_id', message.guild.id)
+                    .in('user_id', userIdsToFetch);
+
+                // นำข้อมูลที่ได้ใส่ลง Map โดยใช้ระบบลำดับความสำคัญ (Priority) เมี๊ยว🐾
+                dbIntros?.forEach(row => {
+                    // ลำดับ: 1. Bot Intro 2. Birthday 3. Intro ปกติ
+                    const content = row.message_bot_introduction || row.message_birthday || row.message_introduction || "";
+                    
+                    if (content) {
+                        const nameMatch = content.match(/ชื่อ\s*[:：]\s*([^\n]+)/);
+                        if (nameMatch) {
+                            userNamesMap.set(row.user_id, nameMatch[1].trim());
+                        }
+                        userIntrosMap.set(row.user_id, content);
+                    }
+                });
+
+                // จัดการชื่อและ Introduction พื้นฐานสำหรับคนที่ยังไม่มีใน DB หรือเคสพิเศษ
                 for (const uId of activeUserIds) {
                     const uObj = message.client.users.cache.get(uId);
                     const uname = uObj ? uObj.username : uId;
@@ -318,71 +416,19 @@ module.exports = {
                         const smIntro = `⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹\nชื่อ: คุณแม่เหมียว\nเพศ: หญิง\nบทบาท: คุณแม่เหมียวในห้อง ห้ามเถียง ห้ามด่า ต้องฟังแม่ ห้ามมารักหรือชอบแม่ ไปชอบลูกแมวเหมียว\n⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹`;
                         userIntrosMap.set(uId, smIntro);
                         userNamesMap.set(uId, 'คุณแม่เหมียว');
-                        foundIntroUserIds.add(uId);
-                    } else {
+                    } else if (!userIntrosMap.has(uId)) {
                         userNamesMap.set(uId, uname);
                     }
                 }
 
-                const fetchIntrosFromChannel = async (channelId) => {
-                    try {
-                        if (!message.client.introCache) message.client.introCache = new Map();
-                        const cacheKey = `${message.guild.id}-${channelId}`;
-                        const cached = message.client.introCache.get(cacheKey);
-                        const now = Date.now();
-
-                        let intros;
-                        let needsFetch = false;
-
-                        if (cached && (now - cached.timestamp < 300000)) { // Cache 5 นาทีเมี๊ยว🐾
-                            intros = cached.data;
-                            // ⭐ ตรวจสอบว่ามีผู้ใช้ใหม่ที่ไม่ได้อยู่ใน Cache หรือไม่
-                            for (const uId of activeUserIds) {
-                                if (uId === 'superdupermeow_') continue;
-                                const hasIntro = intros.some(m => m.author.id === uId);
-                                if (!hasIntro) {
-                                    needsFetch = true;
-                                    break;
-                                }
-                            }
-                        } else {
-                            needsFetch = true;
-                        }
-
-                        if (needsFetch) {
-                            const ch = await message.guild.channels.fetch(channelId).catch(() => null);
-                            if (ch && ch.isTextBased()) {
-                                intros = await ch.messages.fetch({ limit: 100 });
-                                message.client.introCache.set(cacheKey, { data: intros, timestamp: now });
-                                console.log(`[Intro Cache] Refreshed for channel ${channelId} (New user or TTL) 🐾`);
-                            }
-                        }
-
-                        if (intros) {
-                            for (const uId of activeUserIds) {
-                                if (foundIntroUserIds.has(uId)) continue;
-
-                                const userIntro = intros.find(m => m.author.id === uId && m.content.length > 5);
-                                if (userIntro) {
-                                    const content = userIntro.content;
-                                    const nameMatch = content.match(/ชื่อ\s*:\s*([^\n]+)/);
-                                    if (nameMatch) {
-                                        userNamesMap.set(uId, nameMatch[1].trim());
-                                    }
-
-                                    userIntrosMap.set(uId, content);
-                                    foundIntroUserIds.add(uId);
-                                }
-                            }
-                        }
-                    } catch (e) { console.error(`Intro scan error for channel ${channelId}:`, e); }
-                };
-
-                if (introChId) await fetchIntrosFromChannel(introChId);
-                if (backupIntroChId && foundIntroUserIds.size < activeUserIds.size) await fetchIntrosFromChannel(backupIntroChId);
-
                 for (const [uId, introContent] of userIntrosMap.entries()) {
-                    usersContextXml += `  <user name="${userNamesMap.get(uId)}">${introContent}</user>\n`;
+                    const dbUser = dbIntros?.find(r => r.user_id === uId);
+                    const bdayAttr = dbUser?.birth_date ? ` birthday="${dbUser.birth_date.replace(/"/g, '')}"` : "";
+                    const favAttr = dbUser?.favorite_characters ? ` favorite_chars="${dbUser.favorite_characters.replace(/"/g, '')}"` : "";
+
+                    const sanitizedIntro = introContent.replace(/[<>]/g, ''); // ป้องกัน XML พังเมี๊ยว🐾
+                    const userName = (userNamesMap.get(uId) || 'Unknown').replace(/"/g, '');
+                    usersContextXml += `  <user name="${userName}"${bdayAttr}${favAttr}>${sanitizedIntro}</user>\n`;
                 }
                 usersContextXml += "</users_context>";
 
@@ -407,13 +453,16 @@ module.exports = {
                 const isImageCooldown = imageTimePassed < imageCooldownDuration;
                 const imageRemainingSec = Math.ceil((imageCooldownDuration - imageTimePassed) / 1000);
 
-                const imageSystemStatus = isImageCooldown 
+                const imageSystemStatus = isImageCooldown
                     ? `- [SYSTEM] Image Generation: ON COOLDOWN (${imageRemainingSec}s remaining). DO NOT use <image_prompt> right now. If users ask, tell them you're resting or can't draw yet.`
                     : `- [SYSTEM] Image Generation: AVAILABLE. You can use <image_prompt> if it fits the conversation.`;
 
+                const now = new Date();
+                const currentDateTime = `${now.getDate()} ${now.toLocaleString('th-TH', { month: 'long' })} ${now.getFullYear()} เวลา ${now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`;
+
                 const activeUserNames = Array.from(userNamesMap.values()).join(", ");
                 const activePersonaNames = filteredProfiles.map(c => c.name).join(", ");
-                const roomStatusXml = `<room_status>\nผู้ที่กำลังอยู่ในห้องสนทนาตอนนี้:\n- ผู้ใช้ (Users): ${activeUserNames}\n- ตัวละครบอท (Personas ที่จะตอบ): ${activePersonaNames}\n${imageSystemStatus}\n</room_status>`;
+                const roomStatusXml = `<room_status>\nวันเวลาปัจจุบัน: ${currentDateTime}\nผู้ที่กำลังอยู่ในห้องสนทนาตอนนี้:\n- ผู้ใช้ (Users): ${activeUserNames}\n- ตัวละครบอท (Personas ที่จะตอบ): ${activePersonaNames}\n${imageSystemStatus}\n</room_status>`;
                 // 7. ประกอบร่าง System Prompt ด้วยโครงสร้าง XML (Design v2)
                 const systemPrompt = `<instructions>
 You are a role-playing AI in a multiplayer chatroom. 
@@ -438,9 +487,10 @@ You are a role-playing AI in a multiplayer chatroom.
 - หากตัวละครไหนพิจารณาแล้วว่า "ไม่ควรตอบ" ให้ใช้รูปแบบ: <persona name="..." action="skip"><thought>...</thought></persona>
 - สนับสนุนให้ตัวละครโต้ตอบ แซว หรือเถียงกันเองได้ตามนิสัย
 - ตัวละคร 1 ตัวควรพูดสั้นๆ (50-100 ตัวอักษร) เพื่อความสมจริง
+- ตัวละครไหนที่ควรพูดก่อน ให้เอาขึ้นมาก่อนตัวละครอื่นๆ
 
 [DIALOGUE STYLE]
-- ใช้ภาษาพูดธรรมชาติ มีการพูดติดอ่าง หรือลังเลบ้าง (Imperfect speech)
+- ใช้ภาษาพูดธรรมชาติ หรือลังเลบ้าง (Imperfect speech)
 - ห้ามใช้เครื่องหมายดอกจัน * บรรยายท่าทาง ให้ใช้คำพูดสื่อสารอารมณ์แทน
 - **MENTIONS:** หากเห็นข้อความที่มี @ ตามด้วยชื่อ (เช่น @Name) นั่นคือการที่ผู้ใช้กำลังพูดถึงหรือเรียกคนอื่น ไม่ใช่เรียกคุณเสมอไป ให้พิจารณาบริบทด้วย
 
@@ -458,7 +508,7 @@ You are a role-playing AI in a multiplayer chatroom.
   <thought>...</thought>
   <dialogue>ได้เลยค่ะ เดี๋ยววาดให้ดูนะ</dialogue>
   <image_title>อารียากำลังทำอาหาร</image_title>
-  <image_prompt>Character (Aria) wearing a chef hat, cooking in a vibrant kitchen, maintaining original art style and facial features.</image_prompt>
+  <image_prompt>ภาพอาหารที่ อารียา กำลังทำ เป็นสปาเก๊ตตี้คาโบนาร่าที่น่ากิน โดยเป็นจานสีขาว ตัดกับโต๊ะสีดำเผยให้เห็นความน่ากินของอาหารจานนี้</image_prompt>
 </persona>
 </instructions>
 
@@ -538,7 +588,7 @@ ${roomStatusXml}`;
 
                     // สร้าง Content Array สำหรับ Multi-modal เมี๊ยว🐾
                     const contentArray = [{ type: 'text', text: xmlMessage }];
-                    
+
                     // ถ้ารูปที่หาไว้ตรงกับข้อความนี้ ให้ใส่ลงไปใน context ด้วย
                     const imagesForThisMsg = messageImageMap.get(index);
                     if (imagesForThisMsg) {
@@ -557,7 +607,8 @@ ${roomStatusXml}`;
                 await message.channel.sendTyping();
 
                 let aiResponse = await globalAIQueue.run(() => getChatAI(messagesForAI, signal));
-                
+
+
                 if (!aiResponse || aiResponse.includes("OpenRouter Error")) {
                     console.error(`[AI Error] AI2 (getChatAI) failed or returned error message for channel ${message.channelId}`);
                 }
@@ -663,16 +714,16 @@ ${roomStatusXml}`;
                     if (resp.imagePrompt && !imageHandledInThisTurn) {
                         imageHandledInThisTurn = true;
                         const { generateImageAI } = require('../../utils/aiProvider');
-                        
+
                         // ใช้สถานะ Cooldown ที่เช็คไว้ตอนต้นเมี๊ยว🐾
                         if (!isImageCooldown) {
                             message.client.imageCooldowns.set(message.channelId, Date.now());
-                            
+
                             (async () => {
                                 let loadingMsg = null;
                                 try {
                                     const { AttachmentBuilder } = require('discord.js');
-                                    
+
                                     // 1. ส่งข้อความแจ้งเตือนเบื้องต้นก่อนโดยใช้ Webhook ของตัวละครเมี๊ยว🐾
                                     const imgTitle = resp.imageTitle || "รูปภาพ";
                                     loadingMsg = await webhook.send({
@@ -687,7 +738,7 @@ ${roomStatusXml}`;
                                         const d = new Date();
                                         const timestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
                                         const attachment = new AttachmentBuilder(imageBuffer, { name: `${timestamp}.png` });
-                                        
+
                                         // 2. เมื่อรูปเสร็จแล้ว แก้ไขข้อความเดิมเป็นรูปภาพแทนเมี๊ยว🐾
                                         await webhook.editMessage(loadingMsg.id, {
                                             content: "", // ล้างข้อความ "(กำลังส่งรูป...)"
@@ -695,12 +746,12 @@ ${roomStatusXml}`;
                                         });
                                     } else {
                                         // กรณีวาดไม่สำเร็จเมี๊ยว🐾
-                                        await webhook.editMessage(loadingMsg.id, { content: "🐾 *งื้อออ วาดรูปไม่สำเร็จเมี๊ยว...*" }).catch(() => {});
+                                        await webhook.editMessage(loadingMsg.id, { content: "🐾 *งื้อออ วาดรูปไม่สำเร็จเมี๊ยว...*" }).catch(() => { });
                                     }
                                 } catch (err) {
                                     console.error('[Image Gen Error]', err);
                                     if (loadingMsg) {
-                                        await webhook.editMessage(loadingMsg.id, { content: "🐾 *เกิดข้อผิดพลาดในการวาดรูปเมี๊ยว...*" }).catch(() => {});
+                                        await webhook.editMessage(loadingMsg.id, { content: "🐾 *เกิดข้อผิดพลาดในการวาดรูปเมี๊ยว...*" }).catch(() => { });
                                     }
                                 }
                             })();

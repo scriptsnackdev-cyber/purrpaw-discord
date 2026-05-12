@@ -1,4 +1,4 @@
-const { VertexAI } = require('@google-cloud/vertexai');
+const { VertexAI, HarmCategory, HarmBlockThreshold } = require('@google-cloud/vertexai');
 const { GoogleAuth } = require('google-auth-library');
 const axios = require('axios');
 
@@ -57,12 +57,11 @@ function transformMessages(messages) {
                     if (item.type === 'text') {
                         parts.push({ text: item.text });
                     } else if (item.type === 'image_url') {
-                        // Vertex AI SDK รองรับไฟล์ผ่าน base64 หรือ GCS
                         const url = item.image_url?.url || item.image_url;
                         if (url) {
                             parts.push({
                                 fileData: {
-                                    mimeType: 'image/jpeg', // สมมติว่าเป็น jpeg หรือต้องเช็คจริง
+                                    mimeType: 'image/jpeg',
                                     fileUri: url
                                 }
                             });
@@ -77,15 +76,27 @@ function transformMessages(messages) {
         }
     });
 
+    // --- 🚨 กฎเหล็กของ Gemini: ต้องเริ่ม Turn ด้วย 'user' เสมอเมี๊ยว🐾 ---
+    while (contents.length > 0 && contents[0].role !== 'user') {
+        contents.shift();
+    }
+
     return { systemInstruction, contents };
 }
 
 async function getFortuneAI(prompt, userMessage) {
     const rawModel = process.env.FORTUNE_MODEL || process.env.VERTEX_FORTUNE_MODEL || 'gemini-1.5-flash';
     const modelName = cleanModelName(rawModel);
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
-        systemInstruction: prompt 
+        systemInstruction: prompt,
+        safetySettings
     });
 
     try {
@@ -103,9 +114,17 @@ async function getChatAI(messages, signal = null) {
     const modelName = cleanModelName(rawModel);
     const { systemInstruction, contents } = transformMessages(messages);
     
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
+
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
-        systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
+        systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined,
+        safetySettings
     });
 
     let retries = 0;
@@ -116,7 +135,7 @@ async function getChatAI(messages, signal = null) {
         try {
             const requestOptions = { timeout: 60000 };
             const result = await model.generateContent({ contents }, requestOptions);
-            return result.response.candidates[0].content.parts[0].text;
+            return result.response.candidates[0].content.parts[0].text || "";
         } catch (error) {
             const isRateLimit = error.message?.includes('429') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED';
             
@@ -139,12 +158,17 @@ async function getChatAI(messages, signal = null) {
 
 async function checkShouldRespondAI(recentHistory, botNames, userNames, signal = null) {
     const rawModel = process.env.PRECHECK_MODEL || process.env.VERTEX_PRECHECK_MODEL || 'gemini-1.5-flash';
-    const modelName = cleanModelName(rawModel);
-    const systemPrompt = `You are a conversation analyzer for a multi-persona AI chat system...`;
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
-        systemInstruction: systemPrompt 
+        systemInstruction: systemPrompt,
+        safetySettings
     });
 
     try {
@@ -166,12 +190,17 @@ async function checkShouldRespondAI(recentHistory, botNames, userNames, signal =
 
 async function getInitialAI(userPrompt, guildName = "Unknown Server") {
     const rawModel = process.env.INITIAL_MODEL || process.env.VERTEX_INITIAL_MODEL || 'gemini-1.5-flash';
-    const modelName = cleanModelName(rawModel);
-    const systemPrompt = `คุณคือสถาปนิกออกแบบ Discord Server มืออาชีพ...`;
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
-        systemInstruction: systemPrompt 
+        systemInstruction: systemPrompt,
+        safetySettings
     });
 
     try {
@@ -185,12 +214,17 @@ async function getInitialAI(userPrompt, guildName = "Unknown Server") {
 
 async function getRoleButtonAI(userPrompt) {
     const rawModel = process.env.ROLE_MODEL || process.env.VERTEX_ROLE_MODEL || 'gemini-1.5-flash';
-    const modelName = cleanModelName(rawModel);
-    const systemPrompt = `คุณคือผู้ช่วยออกแบบระบบ Role ใน Discord...`;
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
-        systemInstruction: systemPrompt 
+        systemInstruction: systemPrompt,
+        safetySettings
     });
 
     try {
@@ -204,17 +238,17 @@ async function getRoleButtonAI(userPrompt) {
 
 async function getSummaryAI(chatBlock) {
     const rawModel = process.env.SUMMARY_MODEL || process.env.VERTEX_SUMMARY_MODEL || 'gemini-1.5-flash';
-    const modelName = cleanModelName(rawModel);
-    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวสรุปความฉลาดปราดเปรื่อง 🐾
-หน้าที่ของคุณคือ:
-1. รับบันทึกการคุย (Chat Log) ที่ส่งมา
-2. สรุปเหตุการณ์ที่เกิดขึ้นว่าใครทำอะไร ที่ไหน อย่างไร
-3. สรุปเป็นข้อๆ ให้เข้าใจง่าย สั้นกระชับ
-4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)`;
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
-        systemInstruction: systemPrompt 
+        systemInstruction: systemPrompt,
+        safetySettings
     });
 
     try {
@@ -228,19 +262,17 @@ async function getSummaryAI(chatBlock) {
 
 async function getTranslateAI(chatBlock) {
     const rawModel = process.env.SUMMARY_MODEL || process.env.VERTEX_SUMMARY_MODEL || 'gemini-1.5-flash';
-    const modelName = cleanModelName(rawModel);
-    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวนักแปลภาษาผู้รอบรู้ 🐾
-หน้าที่ของคุณคือ:
-1. รับบันทึกการคุย (Chat Log) ที่ส่งมา
-2. แปลบทสนทนานั้นให้เป็นภาษาไทย (หากเป็นภาษาไทยอยู่แล้ว ให้ขัดเกลาให้สละสลวยขึ้น)
-3. คงรูปแบบ "User: Message" เอาไว้เพื่อให้รู้ว่าใครพูดอะไร
-4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)
-5. สรุปใจความสำคัญสั้นๆ ทิ้งท้ายหากบทสนทนายาวเกินไปเมี๊ยว!
-6. ห้ามใช้เครื่องหมาย @ หรือทำการ Tag ชื่อผู้ใช้เด็ดขาด ให้ใช้ชื่อธรรมดาเท่านั้น เพื่อป้องกันการแจ้งเตือนรบกวนเมี๊ยว!`;
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
-        systemInstruction: systemPrompt 
+        systemInstruction: systemPrompt,
+        safetySettings
     });
 
     try {
@@ -258,9 +290,17 @@ async function generateImageAI(prompt, referenceImageUrl = null) {
     const rawModel = process.env.AICHAT_IMAGE_MODEL || 'gemini-2.5-flash-image';
     const modelName = cleanModelName(rawModel);
 
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
+
     // ใช้ Generative Model จาก Instance ที่แยกโซนมาเฉพาะรูปภาพ (us-central1) เมี๊ยว🐾
     const model = imageVertexAI.getGenerativeModel({ 
-        model: modelName
+        model: modelName,
+        safetySettings
     });
 
     try {

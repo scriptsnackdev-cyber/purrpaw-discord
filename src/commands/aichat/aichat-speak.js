@@ -61,63 +61,67 @@ module.exports = {
         const { getGuildData } = require('../../utils/guildCache');
         const { settings } = await getGuildData(guildId);
 
-        let usersContextXml = "<users_context>\n";
         const activeUserIds = new Set();
         historyData.forEach(m => { if (!m.author.bot) activeUserIds.add(m.author.id); });
 
+        // 5. ดึงข้อมูลการแนะนำตัว (Introductions) จาก Supabase 🚀
         const userNamesMap = new Map();
         const userIntrosMap = new Map();
-        const foundIntroUserIds = new Set();
 
-        const introChId = settings.ai_chat?.intro_channel_id;
-        const backupIntroChId = settings.ai_chat?.intro_backup_channel_id;
+        // ดึงข้อมูลลูกบ้านทุกคนที่มีส่วนร่วมในแชทล่าสุดจาก Supabase เมี๊ยว🐾
+        const userIdsToFetch = Array.from(activeUserIds);
+        const { data: dbIntros } = await supabase
+            .from('user_introductions')
+            .select('user_id, message_introduction, message_bot_introduction, message_birthday, birth_date, favorite_characters')
+            .eq('guild_id', guildId)
+            .in('user_id', userIdsToFetch);
 
+        // นำข้อมูลที่ได้ใส่ลง Map โดยใช้ระบบลำดับความสำคัญ (Priority) เมี๊ยว🐾
+        dbIntros?.forEach(row => {
+            // ลำดับ: 1. Bot Intro 2. Birthday 3. Intro ปกติ
+            const content = row.message_bot_introduction || row.message_birthday || row.message_introduction || "";
+            
+            if (content) {
+                const nameMatch = content.match(/ชื่อ\s*[:：]\s*([^\n]+)/);
+                if (nameMatch) userNamesMap.set(row.user_id, nameMatch[1].trim());
+                userIntrosMap.set(row.user_id, content);
+            }
+        });
+
+        // จัดการชื่อและ Introduction พื้นฐานสำหรับคนที่ยังไม่มีใน DB หรือเคสพิเศษ
         for (const uId of activeUserIds) {
             const uObj = interaction.client.users.cache.get(uId);
             const uname = uObj ? uObj.username : uId;
-            
+
             if (uname === 'superdupermeow_') {
                 const smIntro = `⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹\nชื่อ: คุณแม่เหมียว\nเพศ: หญิง\nบทบาท: คุณแม่เหมียวในห้อง ห้ามเถียง ห้ามด่า ต้องฟังแม่ ห้ามมารักหรือชอบแม่ ไปชอบลูกแมวเหมียว\n⊹₊˚‧︵‿₊୨ᰔ୧₊‿︵‧˚₊⊹`;
                 userIntrosMap.set(uId, smIntro);
                 userNamesMap.set(uId, 'คุณแม่เหมียว');
-                foundIntroUserIds.add(uId);
-            } else {
+            } else if (!userIntrosMap.has(uId)) {
                 userNamesMap.set(uId, uname);
             }
         }
 
-        const fetchIntrosFromChannel = async (channelId) => {
-            try {
-                const ch = await interaction.guild.channels.fetch(channelId).catch(() => null);
-                if (ch && ch.isTextBased()) {
-                    const intros = await ch.messages.fetch({ limit: 100 });
-                    for (const uId of activeUserIds) {
-                        if (foundIntroUserIds.has(uId)) continue;
-                        const userIntro = intros.find(m => m.author.id === uId && m.content.length > 5);
-                        if (userIntro) {
-                            const content = userIntro.content;
-                            const nameMatch = content.match(/ชื่อ\s*:\s*([^\n]+)/);
-                            if (nameMatch) userNamesMap.set(uId, nameMatch[1].trim());
-                            userIntrosMap.set(uId, content);
-                            foundIntroUserIds.add(uId);
-                        }
-                    }
-                }
-            } catch (e) { console.error(`Intro scan error:`, e); }
-        };
-
-        if (introChId) await fetchIntrosFromChannel(introChId);
-        if (backupIntroChId && foundIntroUserIds.size < activeUserIds.size) await fetchIntrosFromChannel(backupIntroChId);
-
+        let usersContextXml = "<users_context>\n";
         for (const [uId, introContent] of userIntrosMap.entries()) {
-            usersContextXml += `  <user name="${userNamesMap.get(uId)}">${introContent}</user>\n`;
+            const dbUser = dbIntros?.find(r => r.user_id === uId);
+            const bdayAttr = dbUser?.birth_date ? ` birthday="${dbUser.birth_date.replace(/"/g, '')}"` : "";
+            const favAttr = dbUser?.favorite_characters ? ` favorite_chars="${dbUser.favorite_characters.replace(/"/g, '')}"` : "";
+
+            const sanitizedIntro = introContent.replace(/[<>]/g, ''); // ป้องกัน XML พังเมี๊ยว🐾
+            const userName = (userNamesMap.get(uId) || 'Unknown').replace(/"/g, '');
+            usersContextXml += `  <user name="${userName}"${bdayAttr}${favAttr}>${sanitizedIntro}</user>\n`;
         }
         usersContextXml += "</users_context>";
 
         let finalPersona = char.persona ? char.persona.replace(/{{char}}/gi, char.name) : "";
         finalPersona = finalPersona.replace(/{{user}}/gi, interaction.user.username);
 
+        const now = new Date();
+        const currentDateTime = `${now.getDate()} ${now.toLocaleString('th-TH', { month: 'long' })} ${now.getFullYear()} เวลา ${now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`;
+
         const systemPrompt = `<instructions>
+วันเวลาปัจจุบัน: ${currentDateTime}
 You are playing as ${char.name}.
 [CORE RULES]
 - **IMMERSIVE PORTRAYAL:** มั่นคงในคาแรคเตอร์และอารมณ์ของตัวละครเสมอ

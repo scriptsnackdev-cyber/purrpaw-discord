@@ -58,6 +58,6 @@ class AIQueue {
 }
 
 // สร้าง Instance เดียวสำหรับใช้ทั้งระบบ (Singleton) เมี๊ยว🐾
-const globalAIQueue = new AIQueue(1); // ปรับลดลงเหลือ 1 เพื่อเลี่ยง 429 Rate Limit สำหรับรุ่น Preview เมี๊ยว🐾
+const globalAIQueue = new AIQueue(4); // ปรับเป็น 4 คิวเพื่อให้ตอบได้พร้อมกันหลายห้องเมี๊ยว🐾
 
 module.exports = globalAIQueue;
