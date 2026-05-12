@@ -208,6 +208,10 @@ async function getTranslateAI(chatBlock) {
     }
 }
 
+async function generateImageAI(prompt, referenceImageUrl = null) {
+    return null;
+}
+
 module.exports = { 
     getFortuneAI, 
     getChatAI, 
@@ -215,5 +219,6 @@ module.exports = {
     getInitialAI, 
     getRoleButtonAI, 
     getSummaryAI,
-    getTranslateAI
+    getTranslateAI,
+    generateImageAI
 };

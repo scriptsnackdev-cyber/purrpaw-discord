@@ -430,6 +430,19 @@ You are a role-playing AI in a multiplayer chatroom.
 [DIALOGUE STYLE]
 - ใช้ภาษาพูดธรรมชาติ มีการพูดติดอ่าง หรือลังเลบ้าง (Imperfect speech)
 - ห้ามใช้เครื่องหมายดอกจัน * บรรยายท่าทาง ให้ใช้คำพูดสื่อสารอารมณ์แทน
+- **MENTIONS:** หากเห็นข้อความที่มี @ ตามด้วยชื่อ (เช่น @Name) นั่นคือการที่ผู้ใช้กำลังพูดถึงหรือเรียกคนอื่น ไม่ใช่เรียกคุณเสมอไป ให้พิจารณาบริบทด้วย
+
+[IMAGE GENERATION]
+- หากผู้ใช้ขอให้วาดรูป หรือคุณต้องการแสดงภาพตัวเอง/สิ่งของ/สถานการณ์ ให้เพิ่มแท็ก <image_prompt>รายละเอียดรูปภาพภาษาอังกฤษแบบละเอียด</image_prompt> "นอก" แท็ก <dialogue> (แต่อยู่ใน <persona>)
+- สำคัญ: สร้างรูปภาพเฉพาะเมื่อจำเป็นจริงๆ หรือผู้ใช้สั่งเท่านั้น (นานๆ ครั้ง) อย่าสร้างบ่อยเพื่อประหยัดทรัพยากร
+- **CONSISTENCY:** ใน <image_prompt> ให้บรรยายฉากหรือท่าทางที่ต้องการ โดยอ้างอิงจากลักษณะของคุณ (ใบหน้า, รูปร่าง, การแต่งกาย) และลายเส้น (Art Style) ตามรูป Profile ของคุณอย่างเคร่งครัด ระบบจะส่งรูป Profile ของคุณไปเป็นตัวอย่างให้ AI วาดรูปด้วย
+- แท็ก <image_prompt> จะไม่ถูกโชว์ให้ผู้ใช้เห็น ดังนั้นไม่ต้องกังวล
+- ตัวอย่าง: 
+<persona name="Meow">
+  <thought>...</thought>
+  <dialogue>ได้เลยเมี๊ยว! เดี๋ยววาดให้ดูนะ</dialogue>
+  <image_prompt>Character (Meow) wearing a chef hat, cooking in a vibrant kitchen, maintaining original art style and facial features.</image_prompt>
+</persona>
 </instructions>
 
 ${charsXml}
@@ -439,6 +452,52 @@ ${usersContextXml}
 ${roomStatusXml}`;
 
                 const messagesForAI = [{ role: 'system', content: systemPrompt }];
+
+                // --- 🖼️ ระบบค้นหารูปภาพ 2 รูปล่าสุดในประวัติเมี๊ยว🐾 ---
+                const maxHistoryImages = 2;
+                let foundImagesCount = 0;
+                const messageImageMap = new Map(); // index -> array of image urls
+
+                // วนจากข้อความใหม่ไปเก่าเพื่อหา 2 รูปล่าสุด
+                for (let i = historyData.length - 1; i >= 0 && foundImagesCount < maxHistoryImages; i--) {
+                    const m = historyData[i];
+                    const currentMsgImages = [];
+
+                    // 1. เช็คจาก Attachments
+                    m.attachments.forEach(att => {
+                        if (foundImagesCount < maxHistoryImages && att.contentType?.startsWith('image/')) {
+                            currentMsgImages.push(att.url);
+                            foundImagesCount++;
+                        }
+                    });
+
+                    // 2. เช็คจาก URLs ในข้อความ (ถ้ายังมีโควตาเหลือ)
+                    if (foundImagesCount < maxHistoryImages) {
+                        const urlRegex = /(https?:\/\/\S+\.(?:png|jpe?g|webp|gif))/gi;
+                        const foundUrls = (m.cleanContent || '').match(urlRegex) || [];
+                        foundUrls.forEach(url => {
+                            if (foundImagesCount < maxHistoryImages) {
+                                currentMsgImages.push(url);
+                                foundImagesCount++;
+                            }
+                        });
+                    }
+
+                    // 3. เช็คจาก Embeds (ถ้ายังมีโควตาเหลือ)
+                    if (foundImagesCount < maxHistoryImages) {
+                        m.embeds.forEach(embed => {
+                            const imgUrl = embed.image?.url || embed.thumbnail?.url;
+                            if (imgUrl && foundImagesCount < maxHistoryImages) {
+                                currentMsgImages.push(imgUrl);
+                                foundImagesCount++;
+                            }
+                        });
+                    }
+
+                    if (currentMsgImages.length > 0) {
+                        messageImageMap.set(i, currentMsgImages);
+                    }
+                }
 
                 historyData.forEach((m, index) => {
                     const time = m.createdAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -457,44 +516,24 @@ ${roomStatusXml}`;
                     }
 
                     const typeAttr = m.author.bot ? ' type="persona"' : '';
-                    const msgContent = m.content.replace(/[<>]/g, ''); // ป้องกัน XML แตกเบื้องต้นเมี๊ยว🐾
+                    const msgContent = m.cleanContent.replace(/[<>]/g, ''); // ป้องกัน XML แตกเบื้องต้นเมี๊ยว🐾
                     const xmlMessage = `<msg from="${name}"${typeAttr}${replyAttr} time="${time}">${msgContent}</msg>`;
 
-                    if (index === historyData.length - 1 && !m.author.bot) {
-                        const contentArray = [{ type: 'text', text: xmlMessage }];
-
-                        if (m.attachments.size > 0) {
-                            m.attachments.forEach(att => {
-                                if (att.contentType?.startsWith('image/')) {
-                                    contentArray.push({ type: 'image_url', image_url: { url: att.url } });
-                                }
-                            });
-                        }
-                        const urlRegex = /(https?:\/\/\S+\.(?:png|jpe?g|webp|gif))/gi;
-                        const foundUrls = (m.content || '').match(urlRegex) || [];
-                        foundUrls.forEach(url => {
+                    // สร้าง Content Array สำหรับ Multi-modal เมี๊ยว🐾
+                    const contentArray = [{ type: 'text', text: xmlMessage }];
+                    
+                    // ถ้ารูปที่หาไว้ตรงกับข้อความนี้ ให้ใส่ลงไปใน context ด้วย
+                    const imagesForThisMsg = messageImageMap.get(index);
+                    if (imagesForThisMsg) {
+                        imagesForThisMsg.forEach(url => {
                             contentArray.push({ type: 'image_url', image_url: { url: url } });
                         });
-                        if (m.embeds.length > 0) {
-                            m.embeds.forEach(embed => {
-                                if (embed.image?.url) {
-                                    contentArray.push({ type: 'image_url', image_url: { url: embed.image.url } });
-                                } else if (embed.thumbnail?.url) {
-                                    contentArray.push({ type: 'image_url', image_url: { url: embed.thumbnail.url } });
-                                }
-                            });
-                        }
-
-                        messagesForAI.push({
-                            role: 'user',
-                            content: contentArray
-                        });
-                    } else {
-                        messagesForAI.push({
-                            role: m.author.bot ? 'assistant' : 'user',
-                            content: xmlMessage
-                        });
                     }
+
+                    messagesForAI.push({
+                        role: m.author.bot ? 'assistant' : 'user',
+                        content: contentArray.length === 1 ? contentArray[0].text : contentArray
+                    });
                 });
 
                 // 8. เรียก AI
@@ -512,6 +551,7 @@ ${roomStatusXml}`;
                 const personaRegex = /<persona\s+name=["']([^"']+)["'](?:\s+action=["']([^"']+)["'])?[^>]*>([\s\S]*?)<\/persona>/gi;
                 const thoughtRegex = /<thought>([\s\S]*?)<\/thought>/i;
                 const dialogueRegex = /<dialogue>([\s\S]*?)<\/dialogue>/i;
+                const imagePromptRegex = /<image_prompt>([\s\S]*?)<\/image_prompt>/i;
 
                 let personaMatch;
                 const responses = [];
@@ -524,10 +564,12 @@ ${roomStatusXml}`;
                     if (action === 'skip') continue;
 
                     const dialogueMatch = personaBody.match(dialogueRegex);
+                    const imagePromptMatch = personaBody.match(imagePromptRegex);
                     if (dialogueMatch) {
                         responses.push({
                             name: charName,
-                            message: dialogueMatch[1].trim()
+                            message: dialogueMatch[1].trim(),
+                            imagePrompt: imagePromptMatch ? imagePromptMatch[1].trim() : null
                         });
                     }
                 }
@@ -573,6 +615,10 @@ ${roomStatusXml}`;
                     finalMsg = finalMsg.replace(/^\[\d{2}:\d{2}\]\s*[^:]+\s*:\s*/gm, '').trim();
 
                     if (!finalMsg || finalMsg.length === 0) continue;
+
+                    // ล้างแท็ก <image_prompt> หาก AI เผลอใส่มาใน Dialogue เมี๊ยว🐾
+                    finalMsg = finalMsg.replace(/<image_prompt>[\s\S]*?<\/image_prompt>/gi, '').trim();
+
                     // หาก AI เผลอส่งแท็ก [GIF: ...] มา ให้ลบทิ้ง
                     finalMsg = finalMsg.replace(/\[GIF:\s*(.+?)\]/gi, '').trim();
 
@@ -590,6 +636,42 @@ ${roomStatusXml}`;
                             username: charProfile.name,
                             avatarURL: charProfile.image_url || null
                         });
+                    }
+
+                    // --- 🎨 ระบบสร้างรูปภาพ (Image Generation) ──
+                    if (resp.imagePrompt) {
+                        const { generateImageAI } = require('../../utils/aiProvider');
+                        
+                        // เช็ค Cooldown การสร้างรูป (เช่น 5 นาทีต่อห้อง)
+                        if (!message.client.imageCooldowns) message.client.imageCooldowns = new Map();
+                        const lastImage = message.client.imageCooldowns.get(message.channelId) || 0;
+                        const now = Date.now();
+                        
+                        if (now - lastImage > 300000) { // 5 นาที
+                            message.client.imageCooldowns.set(message.channelId, now);
+                            
+                            (async () => {
+                                try {
+                                    const { AttachmentBuilder } = require('discord.js');
+                                    // แจ้งว่ากำลังวาดรูป
+                                    // await message.channel.send(`🎨 **${charProfile.name}** กำลังวาดรูปให้รอสักครู่นะเมี๊ยว...`).catch(() => {});
+                                    
+                                    const imageBuffer = await generateImageAI(resp.imagePrompt, charProfile.image_url);
+                                    if (imageBuffer) {
+                                        const attachment = new AttachmentBuilder(imageBuffer, { name: 'generated-image.png' });
+                                        await webhook.send({
+                                            files: [attachment],
+                                            username: charProfile.name,
+                                            avatarURL: charProfile.image_url || null
+                                        });
+                                    }
+                                } catch (err) {
+                                    console.error('[Image Gen Error]', err);
+                                }
+                            })();
+                        } else {
+                            console.log(`[Image Gen] Skipped due to cooldown for channel ${message.channelId}`);
+                        }
                     }
                 }
             } catch (err) {

@@ -290,14 +290,20 @@ module.exports = {
                         if (form.remove_role_id) await targetMember.roles.remove(form.remove_role_id).catch(() => { });
                     }
 
-                    const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x22C55E).addFields({ name: 'สถานะ', value: `✅ อนุมัติโดย ${user.tag}` });
+                    const oldEmbed = interaction.message.embeds[0];
+                    const newEmbed = EmbedBuilder.from(oldEmbed)
+                        .setColor(0x22C55E)
+                        .spliceFields(-1, 1, { name: 'สถานะ', value: `✅ อนุมัติโดย ${user.tag}`, inline: true });
                     await interaction.update({ embeds: [newEmbed], components: [] });
                 }
 
                 // --- ปุ่มปฏิเสธฟอร์ม (แอดมิน) ---
                 else if (customId.startsWith('form_reject:')) {
-                    if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมมนเท่านั้นที่ลบปุ่มนี้ได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
-                    const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0xEF4444).addFields({ name: 'สถานะ', value: `❌ ปฏิเสธโดย ${user.tag}` });
+                    if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+                    const oldEmbed = interaction.message.embeds[0];
+                    const newEmbed = EmbedBuilder.from(oldEmbed)
+                        .setColor(0xEF4444)
+                        .spliceFields(-1, 1, { name: 'สถานะ', value: `❌ ปฏิเสธโดย ${user.tag}`, inline: true });
                     await interaction.update({ embeds: [newEmbed], components: [] });
                 }
 
@@ -1083,18 +1089,24 @@ module.exports = {
                     const formId = customId.split(':')[1];
                     const { data: form } = await supabase.from('forms').select('*').eq('id', formId).single();
 
+                    if (!form) return interaction.editReply({ content: '❌ หาข้อมูลฟอร์มไม่เจอเมี๊ยว! (ฟอร์มอาจจะถูกลบไปแล้วหรือระบบฐานข้อมูลมีปัญหา🐾)' });
+
                     const answers = [];
                     for (let i = 0; i < (form.modal_questions?.length || 0); i++) {
                         answers.push({ q: form.modal_questions[i], a: fields.getTextInputValue(`form_answer_${i}`) });
                     }
 
                     const embed = new EmbedBuilder()
-                        .setTitle(`📝 แบบฟอร์มใหม่: ${form.title}`)
+                        .setTitle('📝 คำขอรับบทบาทใหม่เมี๊ยว')
+                        .setThumbnail(user.displayAvatarURL({ dynamic: true }))
                         .setColor(0x3B82F6)
                         .addFields(
-                            { name: '👤 ผู้ส่ง', value: `<@${user.id}> (${user.tag})` },
-                            ...answers.map(ans => ({ name: ans.q, value: ans.a || '-' }))
+                            ...answers.map(ans => ({ name: `Q: ${ans.q}`, value: ans.a || '-' })),
+                            { name: '👤 ผู้ใช้งาน', value: `<@${user.id}>`, inline: true },
+                            { name: '🆔 ID', value: `\`${user.id}\``, inline: true },
+                            { name: 'สถานะ', value: '🟡 **รอดำเนินการ**', inline: true }
                         )
+                        .setFooter({ text: `แบบฟอร์ม: ${form.title}` })
                         .setTimestamp();
 
                     const row = new ActionRowBuilder().addComponents(
@@ -1102,10 +1114,40 @@ module.exports = {
                         new ButtonBuilder().setCustomId(`form_reject:${formId}:${user.id}`).setLabel('ปฏิเสธ').setStyle(ButtonStyle.Danger)
                     );
 
-                    const logChannel = guild.channels.cache.get(form.log_channel_id);
-                    if (logChannel) await logChannel.send({ embeds: [embed], components: [row] });
+                    const logChannelId = form.log_channel_id || settings.form?.approve_channel_id;
+                    const logChannel = logChannelId ? (guild.channels.cache.get(logChannelId) || await guild.channels.fetch(logChannelId).catch(() => null)) : null;
 
-                    return interaction.editReply({ content: '✅ ส่งแบบฟอร์มเรียบร้อยแล้วเมี๊ยวว!🐾 กรุณารอแอดมินตรวจสอบนะเมี๊ยวว' });
+                    if (form.mode === 'auto') {
+                        const targetMember = await guild.members.fetch(user.id).catch(() => null);
+                        if (targetMember) {
+                            if (form.role_id) await targetMember.roles.add(form.role_id).catch(() => { });
+                            if (form.remove_role_id) await targetMember.roles.remove(form.remove_role_id).catch(() => { });
+                        }
+
+                        if (logChannel) {
+                            const autoEmbed = EmbedBuilder.from(embed)
+                                .setColor(0x22C55E)
+                                .addFields({ name: 'สถานะ', value: '✅ อนุมัติอัตโนมัติ' });
+                            
+                            if (logChannel.permissionsFor(guild.members.me).has(PermissionFlagsBits.SendMessages)) {
+                                await logChannel.send({ embeds: [autoEmbed] });
+                            }
+                        }
+                        return interaction.editReply({ content: '✅ ส่งแบบฟอร์มและดำเนินการเรียบร้อยแล้วเมี๊ยวว!🐾' });
+                    } else {
+                        // Manual Mode
+                        if (logChannel) {
+                            if (!logChannel.permissionsFor(guild.members.me).has(PermissionFlagsBits.SendMessages)) {
+                                return interaction.editReply({ content: `❌ บอทไม่มีสิทธิ์ส่งข้อความในห้อง <#${logChannel.id}> เมี๊ยว! กรุณาตรวจสอบสิทธิ์บอทด้วยนะ🐾` });
+                            }
+
+                            await logChannel.send({ embeds: [embed], components: [row] });
+                            return interaction.editReply({ content: `✅ ส่งแบบฟอร์มเรียบร้อยแล้วเมี๊ยวว! (ส่งไปที่ห้อง #${logChannel.name}) 🐾 กรุณารอแอดมินตรวจสอบนะเมี๊ยวว` });
+                        } else {
+                            console.error(`Form submission failed: No log channel found for guild ${guild.id}`);
+                            return interaction.editReply({ content: '❌ งื้อออ ส่งแบบฟอร์มไม่สำเร็จเมี๊ยว! (ไม่พบห้องสำหรับส่งข้อมูลให้แอดมิน กรุณาใช้คำสั่ง `/form set` เพื่อตั้งค่าห้องก่อนนะเมี๊ยว🐾)' });
+                        }
+                    }
                 }
 
                 // --- เปลี่ยนชื่อห้องส่วนตัว ---

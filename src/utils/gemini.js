@@ -190,6 +190,10 @@ async function getTranslateAI(chatBlock) {
     }
 }
 
+async function generateImageAI(prompt, referenceImageUrl = null) {
+    return null; // Gemini OpenAI endpoint doesn't support image generation directly here
+}
+
 module.exports = { 
     getFortuneAI, 
     getChatAI, 
@@ -197,5 +201,6 @@ module.exports = {
     getInitialAI, 
     getRoleButtonAI, 
     getSummaryAI,
-    getTranslateAI
+    getTranslateAI,
+    generateImageAI
 };

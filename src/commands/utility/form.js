@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, ChannelType } = require('discord.js');
 const supabase = require('../../supabaseClient');
+const { invalidateCache } = require('../../utils/guildCache');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -74,6 +75,7 @@ module.exports = {
             settings.form.approve_channel_id = channel.id;
 
             await supabase.from('guilds').update({ settings }).eq('id', guildId);
+            invalidateCache(guildId);
 
             return interaction.reply({ content: `✅ ตั้งค่าห้องอนุมัติสำหรับแอดมินเป็นห้อง ${channel} เรียบร้อยแล้วเมี๊ยวว!`, ephemeral: true });
         }
@@ -150,6 +152,7 @@ module.exports = {
                 if (!settings.form) settings.form = {};
                 settings.form.approve_channel_id = approveChannel.id;
                 await supabase.from('guilds').update({ settings }).eq('id', guildId);
+                invalidateCache(guildId);
             }
 
             const { data: formData, error } = await supabase.from('forms').insert({
@@ -162,7 +165,8 @@ module.exports = {
                 role_id: role?.id || null,
                 remove_role_id: removeRole?.id || null,
                 mode,
-                image_url: imageUrl
+                image_url: imageUrl,
+                log_channel_id: approveChannel?.id || null
             }).select().single();
 
             if (error) {

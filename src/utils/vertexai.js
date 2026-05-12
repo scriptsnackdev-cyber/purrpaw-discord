@@ -1,4 +1,6 @@
 const { VertexAI } = require('@google-cloud/vertexai');
+const { GoogleAuth } = require('google-auth-library');
+const axios = require('axios');
 
 /**
  * Vertex AI Utility (GCP)
@@ -47,6 +49,15 @@ function transformMessages(messages) {
                         parts.push({ text: item.text });
                     } else if (item.type === 'image_url') {
                         // Vertex AI SDK รองรับไฟล์ผ่าน base64 หรือ GCS
+                        const url = item.image_url?.url || item.image_url;
+                        if (url) {
+                            parts.push({
+                                fileData: {
+                                    mimeType: 'image/jpeg', // สมมติว่าเป็น jpeg หรือต้องเช็คจริง
+                                    fileUri: url
+                                }
+                            });
+                        }
                     }
                 });
             } else {
@@ -88,16 +99,32 @@ async function getChatAI(messages, signal = null) {
         systemInstruction: systemInstruction ? { role: 'system', parts: [{ text: systemInstruction }] } : undefined
     });
 
-    try {
-        const requestOptions = { timeout: 60000 };
-        const result = await model.generateContent({ contents }, requestOptions);
-        return result.response.candidates[0].content.parts[0].text;
-    } catch (error) {
-        console.error(`[Vertex AI] Chat Error (${modelName}):`, error);
-        if (error.message?.includes('429')) {
-            return "🐾 *แงงง คนใช้เยอะมากจนแมวตอบไม่ทันแล้วเมี๊ยววว* (Vertex Rate Limit)";
+    let retries = 0;
+    const maxRetries = 3;
+    const baseDelay = 2000; // 2 วินาที
+
+    while (retries <= maxRetries) {
+        try {
+            const requestOptions = { timeout: 60000 };
+            const result = await model.generateContent({ contents }, requestOptions);
+            return result.response.candidates[0].content.parts[0].text;
+        } catch (error) {
+            const isRateLimit = error.message?.includes('429') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED';
+            
+            if (isRateLimit && retries < maxRetries) {
+                retries++;
+                const delay = baseDelay * Math.pow(2, retries - 1);
+                console.warn(`[Vertex AI] Rate limit hit (429). Retrying in ${delay}ms... (Attempt ${retries}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+
+            console.error(`[Vertex AI] Chat Error (${modelName}):`, error);
+            if (isRateLimit) {
+                return "🐾 *แงงง คนใช้เยอะมากจนแมวตอบไม่ทันแล้วเมี๊ยววว* (Vertex Rate Limit - Resource Exhausted)";
+            }
+            return "🐾 *แมวตัวนั้นดูเหมือนจะหลับปุ๋ยไปแล้วเมี๊ยว...* (Vertex Error)";
         }
-        return "🐾 *แมวตัวนั้นดูเหมือนจะหลับปุ๋ยไปแล้วเมี๊ยว...* (Vertex Error)";
     }
 }
 
@@ -216,6 +243,79 @@ async function getTranslateAI(chatBlock) {
     }
 }
 
+async function generateImageAI(prompt, referenceImageUrl = null) {
+    const project = process.env.GOOGLE_PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'us-central1';
+    const rawModel = process.env.AICHAT_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+    const modelName = cleanModelName(rawModel);
+
+    // ใช้ Generative Model แบบใหม่ที่รองรับ Multi-modal Image Generation เมี๊ยว🐾
+    const model = vertexAI.getGenerativeModel({ 
+        model: modelName
+    });
+
+    try {
+        const parts = [{ text: prompt }];
+
+        // หากมีรูปตัวละครอ้างอิง ให้ดึงมาใส่ใน Prompt ด้วยเมี๊ยว🐾
+        if (referenceImageUrl) {
+            try {
+                const imgResp = await axios.get(referenceImageUrl, { responseType: 'arraybuffer' });
+                const base64Data = Buffer.from(imgResp.data, 'binary').toString('base64');
+                const mimeType = imgResp.headers['content-type'] || 'image/webp';
+
+                parts.unshift({
+                    inlineData: {
+                        data: base64Data,
+                        mimeType: mimeType
+                    }
+                });
+                
+                // ปรับ Prompt ให้เน้นการรักษา Style และหน้าตาตัวละครให้เข้มข้นขึ้นเมี๊ยว🐾
+                parts[parts.length - 1].text = `IMPORTANT: Use the provided reference image for character consistency. 
+Generate a new image that EXACTLY maintains the:
+1. ART STYLE: The specific drawing style, lines, and coloring technique.
+2. CHARACTER APPEARANCE: Face features, hair color/style, and distinctive traits.
+3. PERSONALITY: The vibe and expression of the character.
+
+Description of the new scene: ${prompt}`;
+            } catch (imgErr) {
+                console.warn('[Vertex AI] Failed to fetch reference image:', imgErr.message);
+            }
+        }
+
+        const generationConfig = {
+            responseModalities: ["IMAGE", "TEXT"],
+            // ปรับแต่งคุณภาพและขนาดตามที่โมเดล Gemini 3.1 รองรับเมี๊ยว🐾
+            imageConfig: {
+                aspectRatio: "1:1", // หรือ "16:9", "4:3", "3:4", "9:16"
+                // imageSize: "1024x1024" // สามารถปรับตามต้องการ
+            }
+        };
+
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: parts }],
+            generationConfig
+        });
+
+        const response = result.response;
+        const responseParts = response.candidates[0].content.parts;
+        
+        // วนหา Part ที่เป็นข้อมูลรูปภาพ (inlineData)
+        for (const part of responseParts) {
+            if (part.inlineData) {
+                return Buffer.from(part.inlineData.data, 'base64');
+            }
+        }
+        
+        console.warn('[Vertex AI] Image generation did not return image data.');
+        return null;
+    } catch (error) {
+        console.error('[Vertex AI] Generative Image Error:', error);
+        return null;
+    }
+}
+
 module.exports = { 
     getFortuneAI, 
     getChatAI, 
@@ -223,5 +323,6 @@ module.exports = {
     getInitialAI, 
     getRoleButtonAI, 
     getSummaryAI,
-    getTranslateAI
+    getTranslateAI,
+    generateImageAI
 };
