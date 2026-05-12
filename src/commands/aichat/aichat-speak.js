@@ -25,16 +25,16 @@ async function getAutocompleteChars() {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('aichat-speak')
-        .setDescription('🎙️ สั่งให้ AI เจาะจงตัวละครมาตอบทันทีเมี๊ยว🐾')
+        .setDescription('🎙️ สั่งให้ AI เจาะจงตัวละครมาตอบทันที')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addStringOption(o => 
             o.setName('persona')
-                .setDescription('เลือก AI ที่ต้องการให้ตอบเมี๊ยว🐾')
+                .setDescription('เลือก AI ที่ต้องการให้ตอบ')
                 .setRequired(true)
                 .setAutocomplete(true))
         .addStringOption(o => 
             o.setName('topic')
-                .setDescription('หัวข้อที่อยากให้พูดถึง (ไม่ระบุก็ได้เมี๊ยว🐾)')
+                .setDescription('หัวข้อที่อยากให้พูดถึง (ไม่ระบุก็ได้)')
                 .setRequired(false)),
 
     async execute(interaction) {
@@ -47,7 +47,7 @@ module.exports = {
         }
 
         const { data: char } = await supabase.from('ai_characters').select('*').eq('id', botId).single();
-        if (!char) return interaction.editReply({ content: '❌ หาตัวละคร AI ตัวนั้นไม่เจอเลยเมี๊ยว...' });
+        if (!char) return interaction.editReply({ content: '❌ ไม่พบตัวละคร AI ตัวที่ระบุ' });
 
         // 🕒 อัปเดตเวลาที่ถูกเรียกใช้ล่าสุดเมี๊ยว🐾
         await supabase.from('ai_characters').update({ called_at: new Date().toISOString() }).eq('id', botId);
@@ -133,8 +133,8 @@ You are playing as ${char.name}.
 </turn_responses>
 
 [MULTI-CHARACTER RULES]
-- ตัวละครควรพูดสั้นๆ (50-100 ตัวอักษร) เพื่อความสมจริงเมี๊ยว🐾
-${topic ? `\n[PRIORITY TOPIC]\n- ให้เน้นพูดคุยเกี่ยวกับหัวข้อ: "${topic}" เป็นหลักในบทสนทนานี้เมี๊ยว🐾` : ''}
+- ตัวละครควรพูดสั้นๆ (50-100 ตัวอักษร) เพื่อความสมจริง
+${topic ? `\n[PRIORITY TOPIC]\n- ให้เน้นพูดคุยเกี่ยวกับหัวข้อ: "${topic}" เป็นหลักในบทสนทนานี้` : ''}
 </instructions>
 
 <characters>
@@ -158,7 +158,7 @@ ${usersContextXml}`;
         const dialogueMatch = aiResponse && typeof aiResponse === 'string' ? aiResponse.match(dialogueRegex) : null;
         let finalMsg = dialogueMatch ? dialogueMatch[1].trim() : (typeof aiResponse === 'string' ? aiResponse.replace(/<[^>]+>/g, '').trim() : '');
 
-        if (!finalMsg) return interaction.editReply({ content: '❌ AI ไม่ตอบอะไรกลับมาเลยเมี๊ยว...' });
+        if (!finalMsg) return interaction.editReply({ content: '❌ AI ไม่ตอบอะไรกลับมาเลย' });
 
         if (!interaction.client.aiSpeakCache) interaction.client.aiSpeakCache = new Map();
         interaction.client.aiSpeakCache.set(interaction.id, {
@@ -171,7 +171,7 @@ ${usersContextXml}`;
             .setAuthor({ name: char.name, iconURL: char.image_url || null })
             .setDescription(finalMsg)
             .setColor(0x8B5CF6)
-            .setFooter({ text: 'คุณต้องการส่งข้อความนี้ไหมเมี๊ยว? (เห็นแค่คนเดียวนะเมี๊ยว🐾)' });
+            .setFooter({ text: 'คุณต้องการส่งข้อความนี้ไหม? (เห็นแค่คนเดียว)' });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`ai_speak_approve:${interaction.id}`).setLabel('Approve').setStyle(ButtonStyle.Success).setEmoji('✅'),

@@ -24,59 +24,59 @@ async function getAutocompleteChars() {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('aichat')
-        .setDescription('🤖 จัดการตัวละคร AI และการตั้งค่าแชทเมี๊ยว')
+        .setDescription('🤖 จัดการตัวละคร AI และการตั้งค่าแชท')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addSubcommand(sub => 
             sub.setName('create')
-                .setDescription('✨ สร้างตัวละคร AI ใหม่เมี๊ยว')
-                .addStringOption(o => o.setName('name').setDescription('ชื่อของ AI เมี๊ยว').setRequired(true))
-                .addStringOption(o => o.setName('persona').setDescription('นิสัยหรือบทบาทของ AI เมี๊ยว').setRequired(true))
-                .addStringOption(o => o.setName('image_url').setDescription('ลิงก์รูปโปรไฟล์ของ AI เมี๊ยว'))
-                .addBooleanOption(o => o.setName('public').setDescription('อนุญาตให้เซิร์ฟเวอร์อื่นใช้ตัวละครนี้ไหมเมี๊ยว?')))
+                .setDescription('✨ สร้างตัวละคร AI ใหม่')
+                .addStringOption(o => o.setName('name').setDescription('ชื่อของ AI').setRequired(true))
+                .addStringOption(o => o.setName('persona').setDescription('นิสัยหรือบทบาทของ AI').setRequired(true))
+                .addStringOption(o => o.setName('image_url').setDescription('ลิงก์รูปโปรไฟล์ของ AI'))
+                .addBooleanOption(o => o.setName('public').setDescription('อนุญาตให้เซิร์ฟเวอร์อื่นใช้ตัวละครนี้ไหม?')))
         .addSubcommand(sub => 
             sub.setName('summon')
-                .setDescription('🕯️ อัญเชิญ AI มาที่ห้องแชทนี้เมี๊ยว')
-                .addStringOption(o => o.setName('name_or_id').setDescription('ชื่อหรือไอดีของ AI เมี๊ยว').setRequired(true).setAutocomplete(true)))
+                .setDescription('🕯️ อัญเชิญ AI มาที่ห้องแชทนี้')
+                .addStringOption(o => o.setName('name_or_id').setDescription('ชื่อหรือไอดีของ AI').setRequired(true).setAutocomplete(true)))
         .addSubcommand(sub => 
-            sub.setName('list').setDescription('📋 ดูรายชื่อ AI ที่กำลังสแตนบายในห้องนี้เมี๊ยว'))
+            sub.setName('list').setDescription('📋 ดูรายชื่อ AI ที่กำลังสแตนบายในห้องนี้'))
         .addSubcommand(sub => 
-            sub.setName('my-char').setDescription('🗂️ รายชื่อตัวละคร AI ทั้งหมดที่สร้างในเซิร์ฟเวอร์นี้เมี๊ยว'))
+            sub.setName('my-char').setDescription('🗂️ รายชื่อตัวละคร AI ทั้งหมดที่สร้างในเซิร์ฟเวอร์นี้'))
         .addSubcommand(sub => 
             sub.setName('clean')
-                .setDescription('🧹 ไล่ AI ทั้งหมดออกไปจากพื้นที่เมี๊ยว')
+                .setDescription('🧹 ไล่ AI ทั้งหมดออกไปจากพื้นที่')
                 .addStringOption(o => 
                     o.setName('target')
-                        .setDescription('เลือกพื้นที่ที่จะทำความสะอาดเมี๊ยว')
+                        .setDescription('เลือกพื้นที่ที่จะทำความสะอาด')
                         .setRequired(true)
-                        .addChoices({ name: '📍 ห้องนี้ (ที่นี่เมี๊ยว)', value: 'here' })))
+                        .addChoices({ name: '📍 ห้องนี้ (ที่นี่)', value: 'here' })))
         .addSubcommand(sub => 
             sub.setName('leave')
-                .setDescription('👋 ส่ง AI บางตัวกลับบ้านไปก่อนเมี๊ยว')
-                .addStringOption(o => o.setName('name_or_id').setDescription('ชื่อหรือไอดีของ AI เมี๊ยว').setRequired(true).setAutocomplete(true)))
+                .setDescription('👋 ส่ง AI บางตัวกลับบ้านไปก่อน')
+                .addStringOption(o => o.setName('name_or_id').setDescription('ชื่อหรือไอดีของ AI').setRequired(true).setAutocomplete(true)))
         .addSubcommand(sub => 
             sub.setName('settings')
-                .setDescription('⚙️ ปรับแต่งความจำ/จำนวนข้อความที่ AI จำได้เมี๊ยว')
-                .addIntegerOption(o => o.setName('memory').setDescription('จำนวนข้อความล่าสุดที่จะจำ (N ข้อความ)เมี๊ยว').setRequired(true)))
+                .setDescription('⚙️ ปรับแต่งความจำ/จำนวนข้อความที่ AI จำได้')
+                .addIntegerOption(o => o.setName('memory').setDescription('จำนวนข้อความล่าสุดที่จะจำ (N ข้อความ)').setRequired(true)))
         .addSubcommand(sub => 
             sub.setName('set-introduction')
-                .setDescription('📚 ตั้งค่าห้องแนะนำตัวให้ AI ไปแอบศึกษาเมี๊ยว')
-                .addChannelOption(o => o.setName('channel').setDescription('ห้องแนะนำตัวเมี๊ยว').addChannelTypes(ChannelType.GuildText).setRequired(true)))
+                .setDescription('📚 ตั้งค่าห้องแนะนำตัวให้ AI ไปแอบศึกษา')
+                .addChannelOption(o => o.setName('channel').setDescription('ห้องแนะนำตัว').addChannelTypes(ChannelType.GuildText).setRequired(true)))
         .addSubcommand(sub => 
             sub.setName('set-introduction-backup')
-                .setDescription('📚 ตั้งค่าห้องแนะนำตัวสำรองให้ AI ไปแอบศึกษาเมี๊ยว')
-                .addChannelOption(o => o.setName('channel').setDescription('ห้องแนะนำตัวสำรองเมี๊ยว').addChannelTypes(ChannelType.GuildText).setRequired(true)))
+                .setDescription('📚 ตั้งค่าห้องแนะนำตัวสำรองให้ AI ไปแอบศึกษา')
+                .addChannelOption(o => o.setName('channel').setDescription('ห้องแนะนำตัวสำรอง').addChannelTypes(ChannelType.GuildText).setRequired(true)))
         .addSubcommand(sub =>
             sub.setName('create-private-form')
-                .setDescription('📩 สร้างปุ่มกดเปิดห้องคุยส่วนตัวกับ AI เมี๊ยว')
-                .addStringOption(o => o.setName('bot_id').setDescription('เลือก AI ที่จะให้ประจำการในห้องนี้เมี๊ยว').setRequired(true).setAutocomplete(true))
-                .addStringOption(o => o.setName('title').setDescription('หัวข้อของ Embed เมี๊ยว').setRequired(true))
-                .addStringOption(o => o.setName('message').setDescription('เนื้อหาของ Embed เมี๊ยว (ใช้ \\n ขึ้นบรรทัดใหม่ได้เมี๊ยว)').setRequired(true))
-                .addStringOption(o => o.setName('button').setDescription('ข้อความบนปุ่มเมี๊ยว').setRequired(true))
-                .addStringOption(o => o.setName('end_time').setDescription('เวลาหมดอายุของฟอร์ม (รูปแบบ HH:mm เช่น 09:00 หรือ 21:30) เมี๊ยว').setRequired(true))
-                .addStringOption(o => o.setName('image_url').setDescription('ลิงก์รูปภาพประกอบ Embed เมี๊ยว')))
+                .setDescription('📩 สร้างปุ่มกดเปิดห้องคุยส่วนตัวกับ AI')
+                .addStringOption(o => o.setName('bot_id').setDescription('เลือก AI ที่จะให้ประจำการในห้องนี้').setRequired(true).setAutocomplete(true))
+                .addStringOption(o => o.setName('title').setDescription('หัวข้อของ Embed').setRequired(true))
+                .addStringOption(o => o.setName('message').setDescription('เนื้อหาของ Embed (ใช้ \\n ขึ้นบรรทัดใหม่ได้)').setRequired(true))
+                .addStringOption(o => o.setName('button').setDescription('ข้อความบนปุ่ม').setRequired(true))
+                .addStringOption(o => o.setName('end_time').setDescription('เวลาหมดอายุของฟอร์ม (รูปแบบ HH:mm เช่น 09:00 หรือ 21:30)').setRequired(true))
+                .addStringOption(o => o.setName('image_url').setDescription('ลิงก์รูปภาพประกอบ Embed')))
         .addSubcommand(sub =>
             sub.setName('private-end')
-                .setDescription('🚫 สั่งปิดห้อง Private AI Chat ทั้งหมดในเซิร์ฟเวอร์ทันทีเมี๊ยว (Admin Only)')),
+                .setDescription('🚫 สั่งปิดห้อง Private AI Chat ทั้งหมดในเซิร์ฟเวอร์ทันที (Admin Only)')),
 
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
@@ -99,12 +99,12 @@ module.exports = {
                 guild_id: guildId, name, persona, image_url: image, is_public: isPublic
             }).select().single();
 
-            if (error) return interaction.editReply({ content: '❌ ฮืออ สร้างตัวละคร AI ไม่สำเร็จเมี๊ยว...' });
+            if (error) return interaction.editReply({ content: '❌ สร้างตัวละคร AI ไม่สำเร็จ' });
             
             globalCharsCacheTime = 0; // Invalidate autocomplete cache
             
             const embed = new EmbedBuilder()
-                .setTitle(`✅ สร้าง AI สำเร็จแล้วเมี๊ยว: ${name}`)
+                .setTitle(`✅ สร้าง AI สำเร็จแล้ว: ${name}`)
                 .setDescription(`**ID:** \`${data.id}\`\n**นิสัย:** ${persona}`)
                 .setThumbnail(image || null)
                 .setColor(0x22C55E);
@@ -121,7 +121,7 @@ module.exports = {
                 .eq('guild_id', guildId)
                 .single();
 
-            if (error || !char) return interaction.editReply({ content: '❌ หาตัวละคร AI ตัวนั้นไม่เจอเลยเมี๊ยว...' });
+            if (error || !char) return interaction.editReply({ content: '❌ ไม่พบตัวละคร AI ตัวที่ระบุ' });
 
             await supabase.from('active_ai_chats').upsert({
                 channel_id: channelId,
@@ -134,7 +134,7 @@ module.exports = {
                 interaction.client.activeChatCache.delete(channelId);
             }
 
-            return interaction.editReply({ content: `✅ **${char.name}** ถูกอัญเชิญมาแล้วเมี๊ยว! 🕯️ พร้อมรับใช้แล้วนะ!` });
+            return interaction.editReply({ content: `✅ **${char.name}** ถูกอัญเชิญมาแล้ว! 🕯️ พร้อมรับใช้แล้วนะ!` });
         }
 
         // 3. LIST: List AIs in channel
@@ -144,20 +144,20 @@ module.exports = {
                 .select('character_id, ai_characters(name, persona)')
                 .eq('channel_id', channelId);
 
-            if (!activeList || activeList.length === 0) return interaction.editReply({ content: '❌ ตอนนี้ไม่มี AI ตัวไหนอยู่ในห้องนี้เลยเมี๊ยว' });
+            if (!activeList || activeList.length === 0) return interaction.editReply({ content: '❌ ตอนนี้ไม่มี AI ตัวไหนอยู่ในห้องนี้เลย' });
 
             const list = activeList.map(a => `• **${a.ai_characters.name}** (\`${a.character_id}\`)\n  - ${a.ai_characters.persona}`).join('\n\n');
-            const embed = new EmbedBuilder().setTitle('🤖 AI ที่กำลังแสตนบายในห้องนี้เมี๊ยว').setDescription(list).setColor(0x3B82F6);
+            const embed = new EmbedBuilder().setTitle('🤖 AI ที่กำลังแสตนบายในห้องนี้').setDescription(list).setColor(0x3B82F6);
             return interaction.editReply({ embeds: [embed] });
         }
 
         // 4. MY-CHAR: List all created in server
         if (sub === 'my-char') {
             const { data: allChars } = await supabase.from('ai_characters').select('*').eq('guild_id', guildId);
-            if (!allChars || allChars.length === 0) return interaction.editReply({ content: '❌ ยังไม่มีใครสร้างตัวละคร AI ในเซิร์ฟนี้เลยเมี๊ยว...' });
+            if (!allChars || allChars.length === 0) return interaction.editReply({ content: '❌ ยังไม่มีใครสร้างตัวละคร AI ในเซิร์ฟนี้เลย' });
 
             const list = allChars.map(c => `• **${c.name}** (\`${c.id}\`)\n  - สาธารณะ: ${c.is_public ? '✅' : '❌'}`).join('\n\n');
-            const embed = new EmbedBuilder().setTitle('📋 รายชื่อตัวละคร AI ในเซิร์ฟเวอร์เมี๊ยว').setDescription(list).setColor(0x8B5CF6);
+            const embed = new EmbedBuilder().setTitle('📋 รายชื่อตัวละคร AI ในเซิร์ฟเวอร์').setDescription(list).setColor(0x8B5CF6);
             return interaction.editReply({ embeds: [embed] });
         }
 
@@ -172,7 +172,7 @@ module.exports = {
                     interaction.client.activeChatCache.delete(channelId);
                 }
 
-                return interaction.editReply({ content: '🧹 ไล่ AI ทุกตัวออกจากห้องนี้เรียบร้อยแล้วเมี๊ยว! สะอาดกริ๊บ!' });
+                return interaction.editReply({ content: '🧹 ไล่ AI ทุกตัวออกจากห้องนี้เรียบร้อยแล้ว! สะอาดกริ๊บ!' });
             }
         }
 
@@ -185,17 +185,17 @@ module.exports = {
                 .eq('guild_id', guildId)
                 .single();
 
-            if (!char) return interaction.editReply({ content: 'หา AI ตัวนั้นไม่เจอเมี๊ยว...' });
+            if (!char) return interaction.editReply({ content: 'ไม่พบ AI ตัวที่ระบุ' });
 
             const { error } = await supabase.from('active_ai_chats').delete().eq('channel_id', channelId).eq('character_id', char.id);
-            if (error) return interaction.editReply({ content: 'AI ตัวนี้ไม่ได้อยู่ในห้องนี้อยู่แล้วนะเมี๊ยว' });
+            if (error) return interaction.editReply({ content: 'AI ตัวนี้ไม่ได้อยู่ในห้องนี้อยู่แล้วนะ' });
 
             // ⚡ ล้าง Cache เมี๊ยว🐾
             if (interaction.client.activeChatCache) {
                 interaction.client.activeChatCache.delete(channelId);
             }
 
-            return interaction.editReply({ content: `👋 **${search}** ลากลับบ้านไปพักผ่อนแล้วนะเมี๊ยวว` });
+            return interaction.editReply({ content: `👋 **${search}** ลากลับบ้านไปพักผ่อนแล้วนะ` });
         }
 
         // 7. Memory Settings
@@ -208,7 +208,7 @@ module.exports = {
                 interaction.client.activeChatCache.delete(channelId);
             }
 
-            return interaction.editReply({ content: `✅ ตั้งความจำไว้ที่ **${memory}** ข้อความสำหรับห้องนี้แล้วนะเมี๊ยว!` });
+            return interaction.editReply({ content: `✅ ตั้งความจำไว้ที่ **${memory}** ข้อความสำหรับห้องนี้แล้วนะ!` });
         }
 
         // 8. Intro Channel Settings
@@ -222,7 +222,7 @@ module.exports = {
 
             await supabase.from('guilds').update({ settings }).eq('id', guildId);
             invalidateCache(guildId);
-            return interaction.editReply({ content: `✅ AI จะเริ่มไปแอบอ่านข้อมูลแนะนำตัวจากห้อง ${channel} แล้วนะเมี๊ยวว! 📚` });
+            return interaction.editReply({ content: `✅ AI จะเริ่มศึกษาข้อมูลแนะนำตัวจากห้อง ${channel} แล้วนะ! 📚` });
         }
 
         // 8.5. Backup Intro Channel Settings
@@ -236,7 +236,7 @@ module.exports = {
 
             await supabase.from('guilds').update({ settings }).eq('id', guildId);
             invalidateCache(guildId);
-            return interaction.editReply({ content: `✅ ตั้งค่าห้อง **${channel}** เป็นห้องแนะนำตัวสำรอง (Backup) เรียบร้อยแล้วเมี๊ยวว! 📚` });
+            return interaction.editReply({ content: `✅ ตั้งค่าห้อง **${channel}** เป็นห้องแนะนำตัวสำรอง (Backup) เรียบร้อยแล้ว! 📚` });
         }
 
         // 9. Create Private AI Chat Form
@@ -251,7 +251,7 @@ module.exports = {
             // 🕒 คำนวณเวลาหมดอายุเมี๊ยว🐾 (อิงตามเวลาไทย Asia/Bangkok)
             const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
             if (!timeRegex.test(endTimeStr)) {
-                return interaction.editReply({ content: '❌ รูปแบบเวลาไม่ถูกต้องเมี๊ยว! กรุณาใช้รูปแบบ HH:mm (เช่น 09:00)' });
+                return interaction.editReply({ content: '❌ รูปแบบเวลาไม่ถูกต้อง! กรุณาใช้รูปแบบ HH:mm (เช่น 09:00)' });
             }
 
             const [hours, minutes] = endTimeStr.split(':').map(Number);
@@ -268,7 +268,7 @@ module.exports = {
 
             // เช็คว่า AI มีตัวตนจริงไหม
             const { data: bot } = await supabase.from('ai_characters').select('name').eq('id', botId).single();
-            if (!bot) return interaction.editReply({ content: '❌ หาบอท AI ตัวนั้นไม่เจอเมี๊ยว!' });
+            if (!bot) return interaction.editReply({ content: '❌ ไม่พบ AI ตัวที่ระบุ' });
 
             const { data: formData, error } = await supabase.from('ai_chat_forms').insert({
                 guild_id: guildId,
@@ -282,7 +282,7 @@ module.exports = {
 
             if (error) {
                 console.error('Error creating AI form:', error);
-                return interaction.editReply({ content: `❌ สร้างฟอร์มไม่สำเร็จเมี๊ยว: \`${error.message}\`` });
+                return interaction.editReply({ content: `❌ สร้างฟอร์มไม่สำเร็จ: \`${error.message}\`` });
             }
 
             const embed = new EmbedBuilder()
@@ -290,7 +290,7 @@ module.exports = {
                 .setDescription(message.replace(/\\n/g, '\n'))
                 .setImage(imageUrl || null)
                 .setColor(0x8B5CF6)
-                .setFooter({ text: 'กดปุ่มด้านล่างเพื่อเปิดห้องแชทส่วนตัวนะเมี๊ยวว! 🐾' });
+                .setFooter({ text: 'กดปุ่มด้านล่างเพื่อเปิดห้องแชทส่วนตัวนะ! 🐾' });
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
@@ -310,20 +310,20 @@ module.exports = {
                     .setEmoji('🗑️')
             );
 
-            await interaction.editReply({ content: '✅ สร้างปุ่มเปิดห้องแชท AI เรียบร้อยแล้วเมี๊ยวว!' });
+            await interaction.editReply({ content: '✅ สร้างปุ่มเปิดห้องแชท AI เรียบร้อยแล้ว!' });
             return await interaction.channel.send({ embeds: [embed], components: [row] });
         }
 
         // 10. Private End: Close all private chats (Admin Only)
         if (sub === 'private-end') {
             if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return interaction.editReply({ content: '❌ เฉพาะแอดมินเท่านั้นที่สั่งปิดห้องทั้งหมดได้นะเมี๊ยว!' });
+                return interaction.editReply({ content: '❌ เฉพาะแอดมินเท่านั้นที่สั่งปิดห้องทั้งหมดได้นะ' });
             }
 
             const { closeAllSessions } = require('../../utils/aiCleanup');
             const deletedCount = await closeAllSessions(interaction.guild);
 
-            return interaction.editReply({ content: `✅ ปิดห้อง Private AI Chat ทั้งหมดเรียบร้อยเมี๊ยว! (ลบไปทั้งหมด **${deletedCount}** ห้อง🐾)` });
+            return interaction.editReply({ content: `✅ ปิดห้อง Private AI Chat ทั้งหมดเรียบร้อย! (ลบไปทั้งหมด **${deletedCount}** ห้อง🐾)` });
         }
     },
 

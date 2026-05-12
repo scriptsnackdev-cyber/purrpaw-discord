@@ -145,7 +145,7 @@ module.exports = {
                             const attachment = new AttachmentBuilder(imageBuffer, { name: `levelup-${message.author.id}.png` });
                             
                             await message.reply({ 
-                                content: `🎊 **ยินดีด้วยนะเมี๊ยววว! <@${message.author.id}> เลเวลอัพแล้ว!** 🐾✨`,
+                                content: `🎊 **ยินดีด้วยนะ! <@${message.author.id}> เลเวลอัพแล้ว!** 🐾✨`,
                                 files: [attachment] 
                             }).catch(() => {});
                         }
@@ -438,10 +438,10 @@ You are a role-playing AI in a multiplayer chatroom.
 - **CONSISTENCY:** ใน <image_prompt> ให้บรรยายฉากหรือท่าทางที่ต้องการ โดยอ้างอิงจากลักษณะของคุณ (ใบหน้า, รูปร่าง, การแต่งกาย) และลายเส้น (Art Style) ตามรูป Profile ของคุณอย่างเคร่งครัด ระบบจะส่งรูป Profile ของคุณไปเป็นตัวอย่างให้ AI วาดรูปด้วย
 - แท็ก <image_prompt> จะไม่ถูกโชว์ให้ผู้ใช้เห็น ดังนั้นไม่ต้องกังวล
 - ตัวอย่าง: 
-<persona name="Meow">
+<persona name="Aria">
   <thought>...</thought>
-  <dialogue>ได้เลยเมี๊ยว! เดี๋ยววาดให้ดูนะ</dialogue>
-  <image_prompt>Character (Meow) wearing a chef hat, cooking in a vibrant kitchen, maintaining original art style and facial features.</image_prompt>
+  <dialogue>ได้เลยค่ะ เดี๋ยววาดให้ดูนะ</dialogue>
+  <image_prompt>Character (Aria) wearing a chef hat, cooking in a vibrant kitchen, maintaining original art style and facial features.</image_prompt>
 </persona>
 </instructions>
 

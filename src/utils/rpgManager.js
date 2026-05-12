@@ -24,7 +24,7 @@ async function startRPGGame(interaction, channelId, userId) {
 
     if (interaction.isButton()) {
         const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
-            .setDescription('🎬 **การผจญภัยเริ่มต้นขึ้นแล้ว!** ขอให้เหล่าผู้กล้าโชคดีเมี๊ยว🐾')
+            .setDescription('🎬 **การผจญภัยเริ่มต้นขึ้นแล้ว!** ขอให้เหล่าผู้กล้าโชคดี🐾')
             .setImage(null)
             .setFooter({ text: 'สถานะ: กำลังผจญภัย...' });
         
@@ -50,7 +50,7 @@ async function startRPGGame(interaction, channelId, userId) {
 1. ห้ามบ่นว่าผู้เล่นไม่ได้เลือก หรือบอกว่า GM จะสุ่มให้
 2. **ปุ่มตัวเลือก:** ห้ามใส่ชื่อผู้เล่นคนใดคนหนึ่งลงในปุ่ม (choice_a-c) ให้ใช้เป็น "การกระทำกลางๆ" ที่ใครในทีมก็ทำได้
 3. ต้องระบุชัดเจนในส่วนของ <story> ว่าผู้เล่นแต่ละคนทำอะไรและเกิดผลอย่างไรตามที่เขาเลือกมา
-4. ภาษาไทยที่สุ่มละสลวย มีเสน่ห์แบบนิยายญี่ปุ่นเมี๊ยว!`;
+4. ภาษาไทยที่สละสลวย มีเสน่ห์แบบนิยายญี่ปุ่น`;
 
     const aiResponse = await globalAIQueue.run(() => getChatAI([{ role: 'system', content: systemPrompt }, { role: 'user', content: 'เริ่มการผจญภัย!' }]));
     
@@ -92,20 +92,20 @@ async function handleRPGAction(interaction, actionValue, sessionId) {
         .eq('id', sessionId)
         .single();
 
-    if (sessionError || !session) return interaction.reply({ content: '❌ ไม่พบข้อมูลการผจญภัยนี้เมี๊ยว', ephemeral: true });
+    if (sessionError || !session) return interaction.reply({ content: '❌ ไม่พบข้อมูลการผจญภัยนี้', ephemeral: true });
     
     if (actionValue === 'STOP') {
         if (session.creator_id !== userId && !interaction.member.permissions.has('Administrator')) {
-            return interaction.reply({ content: '❌ เฉพาะหัวหน้าปาร์ตี้หรือแอดมินเท่านั้นที่สั่งจบได้เมี๊ยว!', ephemeral: true });
+            return interaction.reply({ content: '❌ เฉพาะหัวหน้าปาร์ตี้หรือแอดมินเท่านั้นที่สั่งจบได้!', ephemeral: true });
         }
         return await endRPGGame(interaction, session);
     }
 
-    if (session.status !== 'active') return interaction.reply({ content: '❌ การผจญภัยนี้จบไปแล้วเมี๊ยว', ephemeral: true });
+    if (session.status !== 'active') return interaction.reply({ content: '❌ การผจญภัยนี้จบไปแล้ว', ephemeral: true });
 
     const players = session.players || [];
     const currentPlayer = players.find(p => p.id === userId);
-    if (!currentPlayer) return interaction.reply({ content: '❌ คุณไม่ได้อยู่ในปาร์ตี้นี้นะเมี๊ยว!', ephemeral: true });
+    if (!currentPlayer) return interaction.reply({ content: '❌ คุณไม่ได้อยู่ในปาร์ตี้นี้นะ!', ephemeral: true });
 
     const { data: existingAction } = await supabase
         .from('rpg_actions')
@@ -115,7 +115,7 @@ async function handleRPGAction(interaction, actionValue, sessionId) {
         .eq('round_number', session.current_round)
         .single();
 
-    if (existingAction) return interaction.reply({ content: '❌ คุณเลือกไปแล้วในรอบนี้ รอเพื่อนๆ ก่อนนะเมี๊ยว🐾', ephemeral: true });
+    if (existingAction) return interaction.reply({ content: '❌ คุณเลือกไปแล้วในรอบนี้ รอเพื่อนๆ ก่อนนะ', ephemeral: true });
 
     const button = interaction.message.components[0].components.find(c => c.customId === interaction.customId);
     const buttonLabel = button ? button.label : actionValue;
@@ -174,7 +174,7 @@ async function processNextRound(interaction, session, actions) {
 
     const goalContext = session.goal ? `\n(ย้ำเป้าหมายแฝง: ${session.goal} - โปรดใบ้ให้เข้าใกล้สิ่งนี้)` : '';
 
-    storyLog.push({ role: 'user', content: `ทุกคนตัดสินใจแล้วในรอบนี้:\n${playerActionsSummary}${goalContext}\n\nจงบรรยายบทถัดไปและให้ทางเลือกใหม่โดยใช้รูปแบบ XML Tags (<story>, <choice_a-c>) เท่านั้นเมี๊ยว!` });
+    storyLog.push({ role: 'user', content: `ทุกคนตัดสินใจแล้วในรอบนี้:\n${playerActionsSummary}${goalContext}\n\nจงบรรยายบทถัดไปและให้ทางเลือกใหม่โดยใช้รูปแบบ XML Tags (<story>, <choice_a-c>) เท่านั้น` });
 
     const aiResponse = await globalAIQueue.run(() => getChatAI(storyLog));
     const { story, buttons } = parseXMLResponse(aiResponse, session.id);
@@ -197,7 +197,7 @@ async function processNextRound(interaction, session, actions) {
     const row = new ActionRowBuilder().addComponents(buttons);
 
     await channel.send({ 
-        content: `✨ **ทุกคนเลือกครบแล้ว!** มาดูผลลัพธ์กันเมี๊ยว...`, 
+        content: `✨ **ทุกคนเลือกครบแล้ว!** มาดูผลลัพธ์กัน...`, 
         embeds: [embed], 
         components: [row],
         files: attachment ? [attachment] : []
@@ -210,7 +210,7 @@ async function endRPGGame(interaction, session) {
     
     const summaryPrompt = [
         ...storyLog,
-        { role: 'user', content: 'การผจญภัยต้องจบลงเพียงเท่านี้ จงสรุปเหตุการณ์ทั้งหมดที่เกิดขึ้นมาอย่างน่าประทับใจและปิดตำนานนี้ในแท็ก <story> เท่านั้นเมี๊ยว!' }
+        { role: 'user', content: 'การผจญภัยต้องจบลงเพียงเท่านี้ จงสรุปเหตุการณ์ทั้งหมดที่เกิดขึ้นมาอย่างน่าประทับใจและปิดตำนานนี้ในแท็ก <story> เท่านั้น' }
     ];
     
     const aiResponse = await globalAIQueue.run(() => getChatAI(summaryPrompt));
@@ -222,7 +222,7 @@ async function endRPGGame(interaction, session) {
         .setTitle('📜 บทสรุปแห่งตำนาน')
         .setDescription(story)
         .setColor(0xFF0000)
-        .setFooter({ text: 'ขอบคุณเหล่าผู้กล้าทุกท่านที่ร่วมเดินทางเมี๊ยว🐾' });
+        .setFooter({ text: 'ขอบคุณเหล่าผู้กล้าทุกท่านที่ร่วมเดินทาง🐾' });
         
     return interaction.editReply({ embeds: [embed], components: [] });
 }
