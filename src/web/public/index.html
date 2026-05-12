@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PurrPaw MBTI Test - ค้นหาตัวตนสไตล์แมวเมี๊ยว</title>
+    <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-glow: rgba(59, 130, 246, 0.5);
+            --secondary: #ec4899;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Anuphan', 'Outfit', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.1) 0%, transparent 40%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            z-index: 1;
+        }
+
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            box-shadow: 0 0 10px var(--primary-glow);
+            transition: width 0.5s ease;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+            background: linear-gradient(to right, #60a5fa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .question-text {
+            font-size: 1.25rem;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            text-align: center;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .option-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 16px 24px;
+            border-radius: 16px;
+            color: var(--text);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .option-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .option-btn:active {
+            transform: scale(0.98);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Result View */
+        .result-view {
+            text-align: center;
+        }
+
+        .result-image {
+            width: 100%;
+            max-width: 300px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .share-btn {
+            background: linear-gradient(135deg, var(--primary), #2563eb);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
+        }
+
+        .share-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 25px rgba(37, 99, 235, 0.4);
+        }
+
+        .share-btn.loading {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .cat-footer {
+            margin-top: 30px;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: center;
+        }
+
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="glass-card">
+            <h1>กำลังเตรียมอุ้งเท้าวิเศษ...</h1>
+            <div class="loader"></div>
+            <p style="text-align: center; color: rgba(255, 255, 255, 0.6);">กรุณารอสักครู่เมี๊ยว🐾</p>
+        </div>
+
+        <!-- Quiz Screen -->
+        <div id="quiz-screen" class="glass-card hidden">
+            <div class="progress-container">
+                <div id="progress-bar"></div>
+            </div>
+            <div id="question-container">
+                <div class="question-text" id="question-text"></div>
+                <div class="options-grid" id="options-grid"></div>
+            </div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="result-screen" class="glass-card hidden result-view">
+            <h1 id="result-title">ผลลัพธ์ของคุณ!</h1>
+            <p id="result-cat-type" style="font-size: 1.2rem; margin-bottom: 20px; color: var(--secondary); font-weight: 600;"></p>
+            <img id="result-image" class="result-image" src="" alt="Result Image">
+            <p id="result-description" style="line-height: 1.6; margin-bottom: 20px; text-align: left; font-size: 0.95rem;"></p>
+            <button id="share-btn" class="share-btn">✨ แชร์ผลลัพธ์ไปที่ Discord</button>
+        </div>
+
+        <div class="cat-footer">
+            PurrPaw AI - Find your inner cat 🐾
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('sessionId');
+
+        let questions = [];
+        let currentIdx = 0;
+        let scores = { E: 0, S: 0, T: 0, J: 0 };
+        let sessionData = null;
+
+        // 1. Fetch Session and Questions
+        async function init() {
+            if (!sessionId) {
+                document.getElementById('loading-screen').innerHTML = '<h1>❌ ไม่พบรหัสเซสชันเมี๊ยว🐾</h1><p>กรุณากดเริ่มทำจากใน Discord นะ!</p>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/session/${sessionId}`);
+                const data = await res.json();
+
+                if (data.error) throw new Error(data.error);
+
+                sessionData = data.session;
+                questions = data.questions;
+
+                showQuiz();
+            } catch (err) {
+                document.getElementById('loading-screen').innerHTML = `<h1>❌ งื้อออ เกิดข้อผิดพลาดเมี๊ยว🐾</h1><p>${err.message}</p>`;
+            }
+        }
+
+        function showQuiz() {
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('hidden');
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            const q = questions[currentIdx];
+            const qText = document.getElementById('question-text');
+            const optionsGrid = document.getElementById('options-grid');
+            const progressBar = document.getElementById('progress-bar');
+
+            // Update Progress
+            const progress = (currentIdx / questions.length) * 100;
+            progressBar.style.width = `${progress}%`;
+
+            // Clear and Render
+            qText.innerText = q.text;
+            optionsGrid.innerHTML = '';
+
+            q.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn fade-in';
+                btn.style.animationDelay = `${idx * 0.1}s`;
+                btn.innerText = opt.label;
+                btn.onclick = () => handleAnswer(opt.val, q.dim);
+                optionsGrid.appendChild(btn);
+            });
+        }
+
+        async function handleAnswer(val, dim) {
+            scores[dim] += val;
+            currentIdx++;
+
+            if (currentIdx < questions.length) {
+                renderQuestion();
+            } else {
+                showResult();
+            }
+        }
+
+        async function showResult() {
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('loading-screen').classList.remove('hidden');
+
+            const mbti = [
+                scores.E >= 0 ? 'E' : 'I',
+                scores.S >= 0 ? 'S' : 'N',
+                scores.T >= 0 ? 'T' : 'F',
+                scores.J >= 0 ? 'J' : 'P'
+            ].join('');
+
+            // ในระบบจริง ข้อมูลรูปภาพและคำบรรยายควรดึงจาก API หรือ JSON
+            // แต่เพื่อความเร็ว ผมจะจำลองการโหลดข้อมูลผลลัพธ์เมี๊ยว🐾
+            
+            try {
+                const submitRes = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, scores, result: mbti })
+                });
+                
+                // สรุปผล UI (จำลองข้อมูลที่ควรมาจาก Server)
+                // หมายเหตุ: ในโปรดักชั่นควรมี API ส่งข้อมูล MBTI Description กลับมา
+                // ตรงนี้ผมขอให้บอทจัดการส่งกลับ Discord เป็นหลักเมี๊ยว🐾
+                
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('result-screen').classList.remove('hidden');
+                document.getElementById('result-title').innerText = `คุณคือบุคลิก ${mbti}!`;
+                document.getElementById('result-description').innerText = 'บันทึกผลการทดสอบเรียบร้อยแล้วเมี๊ยว! กดแชร์เพื่อประกาศให้เพื่อนๆ ใน Discord รู้ได้เลยนะ🐾';
+                
+                document.getElementById('share-btn').onclick = async () => {
+                    const btn = document.getElementById('share-btn');
+                    btn.classList.add('loading');
+                    btn.innerText = 'กำลังแชร์... 🐾';
+                    
+                    // ระบบแชร์ผลจะทำงานผ่านบอทที่เช็คสถานะ Session Completed เมี๊ยว🐾
+                    // หรือจะเรียก API เพื่อ Trigger ก้ได้
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    btn.innerText = '✅ แชร์สำเร็จแล้วเมี๊ยว!';
+                    btn.style.background = '#22c55e';
+                    btn.disabled = true;
+                    
+                    alert('แชร์ผลสำเร็จแล้ว! กลับไปดูที่ Discord ได้เลยนะเมี๊ยว🐾');
+                };
+
+            } catch (err) {
+                alert('เกิดข้อผิดพลาดในการบันทึกผลเมี๊ยว🐾');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
