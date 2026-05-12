@@ -7,17 +7,26 @@ const axios = require('axios');
  * ใช้ Environment Variables สำหรับการทำ Authentication เมี๊ยว🐾
  */
 
+const googleAuthOptions = {
+    credentials: {
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    }
+};
+
 const vertexAI = new VertexAI({
     project: process.env.GOOGLE_PROJECT_ID,
     location: process.env.GCP_LOCATION || 'us-central1',
     // ถ้าใช้โซน global ให้วิ่งไปที่ Endpoint กลางโดยตรงเมี๊ยว🐾
     apiEndpoint: process.env.GCP_LOCATION === 'global' ? 'aiplatform.googleapis.com' : undefined,
-    googleAuthOptions: {
-        credentials: {
-            client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }
-    }
+    googleAuthOptions
+});
+
+// แยก Instance สำหรับสร้างรูปภาพโดยเฉพาะตามที่ต้องการเมี๊ยว🐾
+const imageVertexAI = new VertexAI({
+    project: process.env.GOOGLE_PROJECT_ID,
+    location: process.env.IMAGE_GCP_LOCATION || 'us-central1',
+    googleAuthOptions
 });
 
 // Helper สำหรับล้างชื่อโมเดลให้เข้ากับ Vertex AI (ฉลาดกว่าเดิมเมี๊ยว🐾)
@@ -245,12 +254,12 @@ async function getTranslateAI(chatBlock) {
 
 async function generateImageAI(prompt, referenceImageUrl = null) {
     const project = process.env.GOOGLE_PROJECT_ID;
-    const location = process.env.GCP_LOCATION || 'us-central1';
-    const rawModel = process.env.AICHAT_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+    const location = process.env.IMAGE_GCP_LOCATION || 'us-central1';
+    const rawModel = process.env.AICHAT_IMAGE_MODEL || 'gemini-2.5-flash-image';
     const modelName = cleanModelName(rawModel);
 
-    // ใช้ Generative Model แบบใหม่ที่รองรับ Multi-modal Image Generation เมี๊ยว🐾
-    const model = vertexAI.getGenerativeModel({ 
+    // ใช้ Generative Model จาก Instance ที่แยกโซนมาเฉพาะรูปภาพ (us-central1) เมี๊ยว🐾
+    const model = imageVertexAI.getGenerativeModel({ 
         model: modelName
     });
 

@@ -399,9 +399,21 @@ module.exports = {
                 });
                 charsXml += "</characters>";
 
+                // --- 🎨 เช็คสถานะ Cooldown การสร้างรูปเพื่อให้ AI รับรู้เมี๊ยว🐾 ---
+                if (!message.client.imageCooldowns) message.client.imageCooldowns = new Map();
+                const lastImageTime = message.client.imageCooldowns.get(channelId) || 0;
+                const imageCooldownDuration = 120000; // 2 นาที
+                const imageTimePassed = Date.now() - lastImageTime;
+                const isImageCooldown = imageTimePassed < imageCooldownDuration;
+                const imageRemainingSec = Math.ceil((imageCooldownDuration - imageTimePassed) / 1000);
+
+                const imageSystemStatus = isImageCooldown 
+                    ? `- [SYSTEM] Image Generation: ON COOLDOWN (${imageRemainingSec}s remaining). DO NOT use <image_prompt> right now. If users ask, tell them you're resting or can't draw yet.`
+                    : `- [SYSTEM] Image Generation: AVAILABLE. You can use <image_prompt> if it fits the conversation.`;
+
                 const activeUserNames = Array.from(userNamesMap.values()).join(", ");
                 const activePersonaNames = filteredProfiles.map(c => c.name).join(", ");
-                const roomStatusXml = `<room_status>\nผู้ที่กำลังอยู่ในห้องสนทนาตอนนี้:\n- ผู้ใช้ (Users): ${activeUserNames}\n- ตัวละครบอท (Personas ที่จะตอบ): ${activePersonaNames}\n</room_status>`;
+                const roomStatusXml = `<room_status>\nผู้ที่กำลังอยู่ในห้องสนทนาตอนนี้:\n- ผู้ใช้ (Users): ${activeUserNames}\n- ตัวละครบอท (Personas ที่จะตอบ): ${activePersonaNames}\n${imageSystemStatus}\n</room_status>`;
                 // 7. ประกอบร่าง System Prompt ด้วยโครงสร้าง XML (Design v2)
                 const systemPrompt = `<instructions>
 You are a role-playing AI in a multiplayer chatroom. 
@@ -433,14 +445,19 @@ You are a role-playing AI in a multiplayer chatroom.
 - **MENTIONS:** หากเห็นข้อความที่มี @ ตามด้วยชื่อ (เช่น @Name) นั่นคือการที่ผู้ใช้กำลังพูดถึงหรือเรียกคนอื่น ไม่ใช่เรียกคุณเสมอไป ให้พิจารณาบริบทด้วย
 
 [IMAGE GENERATION]
-- หากผู้ใช้ขอให้วาดรูป หรือคุณต้องการแสดงภาพตัวเอง/สิ่งของ/สถานการณ์ ให้เพิ่มแท็ก <image_prompt>รายละเอียดรูปภาพภาษาอังกฤษแบบละเอียด</image_prompt> "นอก" แท็ก <dialogue> (แต่อยู่ใน <persona>)
+- หากผู้ใช้ขอให้วาดรูป หรือคุณต้องการแสดงภาพตัวเอง/สิ่งของ/สถานการณ์ ให้เพิ่มแท็กดังนี้:
+  1. <image_title>ชื่อรูปภาพสั้นๆ กระชับ (ภาษาไทย)</image_title>
+  2. <image_prompt>รายละเอียดรูปภาพภาษาอังกฤษแบบละเอียด</image_prompt>
+- ทั้งสองแท็กต้องอยู่ "นอก" แท็ก <dialogue> (แต่อยู่ใน <persona>)
+- **ONLY ONE PER TURN:** ในหนึ่งรอบการตอบกลับ (Turn) อนุญาตให้มีตัวละคร **"เพียงตัวเดียวเท่านั้น"** ที่ใช้แท็กเกี่ยวกับรูปภาพ หากต้องการส่งหลายตัว ให้ตกลงกันหรือเลือกตัวที่เหมาะสมที่สุดเพียงตัวเดียว
 - สำคัญ: สร้างรูปภาพเฉพาะเมื่อจำเป็นจริงๆ หรือผู้ใช้สั่งเท่านั้น (นานๆ ครั้ง) อย่าสร้างบ่อยเพื่อประหยัดทรัพยากร
 - **CONSISTENCY:** ใน <image_prompt> ให้บรรยายฉากหรือท่าทางที่ต้องการ โดยอ้างอิงจากลักษณะของคุณ (ใบหน้า, รูปร่าง, การแต่งกาย) และลายเส้น (Art Style) ตามรูป Profile ของคุณอย่างเคร่งครัด ระบบจะส่งรูป Profile ของคุณไปเป็นตัวอย่างให้ AI วาดรูปด้วย
-- แท็ก <image_prompt> จะไม่ถูกโชว์ให้ผู้ใช้เห็น ดังนั้นไม่ต้องกังวล
+- แท็ก <image_title> และ <image_prompt> จะไม่ถูกโชว์ให้ผู้ใช้เห็นในรูปแบบข้อความปกติ ดังนั้นไม่ต้องกังวล
 - ตัวอย่าง: 
 <persona name="Aria">
   <thought>...</thought>
   <dialogue>ได้เลยค่ะ เดี๋ยววาดให้ดูนะ</dialogue>
+  <image_title>อารียากำลังทำอาหาร</image_title>
   <image_prompt>Character (Aria) wearing a chef hat, cooking in a vibrant kitchen, maintaining original art style and facial features.</image_prompt>
 </persona>
 </instructions>
@@ -552,6 +569,7 @@ ${roomStatusXml}`;
                 const thoughtRegex = /<thought>([\s\S]*?)<\/thought>/i;
                 const dialogueRegex = /<dialogue>([\s\S]*?)<\/dialogue>/i;
                 const imagePromptRegex = /<image_prompt>([\s\S]*?)<\/image_prompt>/i;
+                const imageTitleRegex = /<image_title>([\s\S]*?)<\/image_title>/i;
 
                 let personaMatch;
                 const responses = [];
@@ -565,11 +583,13 @@ ${roomStatusXml}`;
 
                     const dialogueMatch = personaBody.match(dialogueRegex);
                     const imagePromptMatch = personaBody.match(imagePromptRegex);
+                    const imageTitleMatch = personaBody.match(imageTitleRegex);
                     if (dialogueMatch) {
                         responses.push({
                             name: charName,
                             message: dialogueMatch[1].trim(),
-                            imagePrompt: imagePromptMatch ? imagePromptMatch[1].trim() : null
+                            imagePrompt: imagePromptMatch ? imagePromptMatch[1].trim() : null,
+                            imageTitle: imageTitleMatch ? imageTitleMatch[1].trim() : "รูปภาพ"
                         });
                     }
                 }
@@ -602,6 +622,7 @@ ${roomStatusXml}`;
                     message.client.webhookCache.set(message.channelId, webhook);
                 }
 
+                let imageHandledInThisTurn = false;
                 for (const resp of allowedResponses) {
                     const charProfile = filteredProfiles.find(c => c.name.toLowerCase() === resp.name.toLowerCase()) || filteredProfiles[0];
 
@@ -639,16 +660,13 @@ ${roomStatusXml}`;
                     }
 
                     // --- 🎨 ระบบสร้างรูปภาพ (Image Generation) ──
-                    if (resp.imagePrompt) {
+                    if (resp.imagePrompt && !imageHandledInThisTurn) {
+                        imageHandledInThisTurn = true;
                         const { generateImageAI } = require('../../utils/aiProvider');
                         
-                        // เช็ค Cooldown การสร้างรูป (เช่น 2 นาทีต่อห้อง)
-                        if (!message.client.imageCooldowns) message.client.imageCooldowns = new Map();
-                        const lastImage = message.client.imageCooldowns.get(message.channelId) || 0;
-                        const now = Date.now();
-                        
-                        if (now - lastImage > 120000) { // 2 นาที
-                            message.client.imageCooldowns.set(message.channelId, now);
+                        // ใช้สถานะ Cooldown ที่เช็คไว้ตอนต้นเมี๊ยว🐾
+                        if (!isImageCooldown) {
+                            message.client.imageCooldowns.set(message.channelId, Date.now());
                             
                             (async () => {
                                 let loadingMsg = null;
@@ -656,8 +674,9 @@ ${roomStatusXml}`;
                                     const { AttachmentBuilder } = require('discord.js');
                                     
                                     // 1. ส่งข้อความแจ้งเตือนเบื้องต้นก่อนโดยใช้ Webhook ของตัวละครเมี๊ยว🐾
+                                    const imgTitle = resp.imageTitle || "รูปภาพ";
                                     loadingMsg = await webhook.send({
-                                        content: "(กำลังส่งรูป...)",
+                                        content: `(กำลังส่งรูป ${imgTitle}...)`,
                                         username: charProfile.name,
                                         avatarURL: charProfile.image_url || null,
                                         wait: true // สำคัญ: ต้องรอเพื่อให้ได้ Message Object มาแก้ไขเมี๊ยว🐾
@@ -665,21 +684,23 @@ ${roomStatusXml}`;
 
                                     const imageBuffer = await generateImageAI(resp.imagePrompt, charProfile.image_url);
                                     if (imageBuffer) {
-                                        const attachment = new AttachmentBuilder(imageBuffer, { name: 'generated-image.png' });
+                                        const d = new Date();
+                                        const timestamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
+                                        const attachment = new AttachmentBuilder(imageBuffer, { name: `${timestamp}.png` });
                                         
                                         // 2. เมื่อรูปเสร็จแล้ว แก้ไขข้อความเดิมเป็นรูปภาพแทนเมี๊ยว🐾
-                                        await loadingMsg.edit({
+                                        await webhook.editMessage(loadingMsg.id, {
                                             content: "", // ล้างข้อความ "(กำลังส่งรูป...)"
                                             files: [attachment]
                                         });
                                     } else {
                                         // กรณีวาดไม่สำเร็จเมี๊ยว🐾
-                                        await loadingMsg.edit({ content: "🐾 *งื้อออ วาดรูปไม่สำเร็จเมี๊ยว...*" }).catch(() => {});
+                                        await webhook.editMessage(loadingMsg.id, { content: "🐾 *งื้อออ วาดรูปไม่สำเร็จเมี๊ยว...*" }).catch(() => {});
                                     }
                                 } catch (err) {
                                     console.error('[Image Gen Error]', err);
                                     if (loadingMsg) {
-                                        await loadingMsg.edit({ content: "🐾 *เกิดข้อผิดพลาดในการวาดรูปเมี๊ยว...*" }).catch(() => {});
+                                        await webhook.editMessage(loadingMsg.id, { content: "🐾 *เกิดข้อผิดพลาดในการวาดรูปเมี๊ยว...*" }).catch(() => {});
                                     }
                                 }
                             })();
