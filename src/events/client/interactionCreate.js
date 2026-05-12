@@ -264,33 +264,10 @@ module.exports = {
                     if (isSBTI && features.sbti === false) return interaction.reply({ content: '❌ ระบบ SBTI ถูกปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
                     if (!isSBTI && features.mbti === false) return interaction.reply({ content: '❌ ระบบ MBTI ถูกปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
 
-                    const embed = new EmbedBuilder()
-                        .setTitle(`🧠 เลือกช่องทางการทำแบบทดสอบ ${isSBTI ? 'SBTI' : 'MBTI'}`)
-                        .setDescription(`🐾 **เลือกได้เลยว่าอยากทำแบบไหนนะเมี๊ยว!**\n\n✨ **แบบเว็บไซต์ (แนะนำ):** กราฟิกสวยงาม ลื่นไหล และแชร์ผลลัพธ์ได้ง่ายกว่า\n💬 **แบบ Discord:** ทำผ่านปุ่มในห้องแชทนี้ได้ทันทีเลยเมี๊ยว!`)
-                        .setColor(isSBTI ? 0xEC4899 : 0x3B82F6);
-
-                    const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`${customId}_web`)
-                            .setLabel('🚀 ทำบนเว็บไซต์ (แนะนำ)')
-                            .setStyle(ButtonStyle.Success),
-                        new ButtonBuilder()
-                            .setCustomId(`${customId}_discord`)
-                            .setLabel('💬 ทำใน Discord')
-                            .setStyle(ButtonStyle.Primary)
-                    );
-
-                    return interaction.reply({ embeds: [embed], components: [row], flags: [MessageFlags.Ephemeral] });
-                }
-
-                // --- จัดการการเลือก Web / Discord ---
-                else if (customId.endsWith('_web')) {
-                    const baseId = customId.replace('_web', '');
-                    const isSBTI = baseId === 'sbti_start';
-                    
-                    await interaction.deferUpdate();
+                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
                     try {
+                        // 1. สร้าง Session รอไว้เลยเมี๊ยว🐾
                         const { data: session, error } = await supabase.from('user_mbti_sessions').insert({
                             user_id: user.id,
                             guild_id: guild.id,
@@ -305,24 +282,29 @@ module.exports = {
                         const uniqueUrl = `${baseUrl}/${isSBTI ? 'sbti' : 'mbti'}?sessionId=${session.id}`;
 
                         const embed = new EmbedBuilder()
-                            .setTitle(`🚀 ลิงก์ทำแบบทดสอบ ${isSBTI ? 'SBTI' : 'MBTI'} บนเว็บ`)
-                            .setDescription(`✨ **กดลิงก์ด้านล่างเพื่อเริ่มทำได้เลยเมี๊ยว!**\n\n🔗 [กดตรงนี้เพื่อเริ่มทำแบบทดสอบ](${uniqueUrl})\n\n*หมายเหตุ: ลิงก์นี้มีอายุ 30 นาทีนะเมี๊ยว🐾*`)
+                            .setTitle(`🧠 เริ่มทำแบบทดสอบ ${isSBTI ? 'SBTI' : 'MBTI'}`)
+                            .setDescription(`🐾 **เลือกช่องทางที่คุณสะดวกได้เลยเมี๊ยว!**\n\n✨ **แบบเว็บไซต์ (แนะนำ):** กราฟิกสวยงาม ลื่นไหล\n💬 **แบบ Discord:** ทำผ่านปุ่มในห้องแชทนี้`)
                             .setColor(isSBTI ? 0xEC4899 : 0x3B82F6);
 
                         const row = new ActionRowBuilder().addComponents(
                             new ButtonBuilder()
-                                .setLabel('🚀 เริ่มทำแบบทดสอบบนเว็บ')
+                                .setLabel('🚀 ทำบนเว็บไซต์ (แนะนำ)')
                                 .setStyle(ButtonStyle.Link)
-                                .setURL(uniqueUrl)
+                                .setURL(uniqueUrl),
+                            new ButtonBuilder()
+                                .setCustomId(`${customId}_discord`)
+                                .setLabel('💬 ทำใน Discord')
+                                .setStyle(ButtonStyle.Primary)
                         );
 
                         return interaction.editReply({ embeds: [embed], components: [row] });
                     } catch (err) {
-                        console.error('Web Link Error:', err);
-                        return interaction.editReply({ content: 'งื้อออ เกิดข้อผิดพลาดเมี๊ยว!', components: [] });
+                        console.error('Session Init Error:', err);
+                        return interaction.editReply({ content: 'งื้อออ เกิดข้อผิดพลาดเมี๊ยว!' });
                     }
                 }
 
+                // --- จัดการการเลือก Discord (Web เป็น Link ไปแล้วเมี๊ยว🐾) ---
                 else if (customId.endsWith('_discord')) {
                     const baseId = customId.replace('_discord', '');
                     const isSBTI = baseId === 'sbti_start';
