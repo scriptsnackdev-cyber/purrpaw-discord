@@ -312,18 +312,41 @@
                     body: JSON.stringify({ sessionId, scores, result: mbti })
                 });
                 
+                const data = await res.json();
+                
                 document.getElementById('loading-screen').classList.add('hidden');
                 document.getElementById('result-screen').classList.remove('hidden');
                 document.getElementById('result-title').innerText = `คุณคือบุคลิก ${mbti}!`;
-                document.getElementById('result-description').innerText = 'บันทึกผลการทดสอบเรียบร้อยแล้วเมี๊ยว! กดแชร์เพื่อประกาศให้เพื่อนๆ ใน Discord รู้ได้เลยนะ🐾';
+                document.getElementById('result-description').innerText = `🐱 คุณคือ: ${data.cat_type}\n\nบันทึกผลการทดสอบเรียบร้อยแล้วเมี๊ยว! กดแชร์เพื่อประกาศให้เพื่อนๆ ใน Discord รู้ได้เลยนะ🐾`;
+                
+                if (data.image_url) {
+                    document.getElementById('result-image').src = data.image_url;
+                }
                 
                 document.getElementById('share-btn').onclick = async () => {
                     const btn = document.getElementById('share-btn');
-                    btn.innerText = 'กำลังแชร์... 🐾';
+                    const originalText = btn.innerText;
+                    btn.innerText = 'กำลังแชร์ไปที่ Discord... 🐾';
                     btn.disabled = true;
-                    await new Promise(r => setTimeout(r, 1000));
-                    btn.innerText = '✅ แชร์สำเร็จแล้วเมี๊ยว!';
-                    btn.style.background = '#22c55e';
+
+                    try {
+                        const shareRes = await fetch('/api/share', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId, result: mbti })
+                        });
+                        
+                        if (shareRes.ok) {
+                            btn.innerText = '✅ แชร์สำเร็จแล้วเมี๊ยว!';
+                            btn.style.background = '#22c55e';
+                        } else {
+                            throw new Error();
+                        }
+                    } catch (err) {
+                        btn.innerText = '❌ แชร์ไม่สำเร็จเมี๊ยว...';
+                        btn.disabled = false;
+                        setTimeout(() => { btn.innerText = originalText; }, 3000);
+                    }
                 };
             } catch (err) {
                 alert('เกิดข้อผิดพลาดในการบันทึกผลเมี๊ยว🐾');

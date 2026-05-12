@@ -49,4 +49,10 @@ async function sendTestResult(client, { userId, guildId, channelId, type, result
     }
 }
 
-module.exports = { sendTestResult };
+module.exports = { 
+    sendTestResult, 
+    MBTI_DATA, 
+    MBTI_IMAGES, 
+    SBTI_DATA, 
+    SBTI_IMAGES 
+};

@@ -60,17 +60,16 @@ function startDashboard(client) {
             const { data: session, error } = await supabase.from('user_mbti_sessions').select('*').eq('id', sessionId).single();
             if (error || !session) return res.status(404).json({ error: 'Session Expired เมี๊ยว🐾' });
 
+            // ดึงข้อมูลรูปภาพและข้อมูลแมวเมี๊ยว🐾
+            const { MBTI_DATA, MBTI_IMAGES, SBTI_DATA, SBTI_IMAGES } = require('../utils/mbtiShared');
+            const isSBTI = session.type === 'sbti';
+            const data = isSBTI ? SBTI_DATA[result] : MBTI_DATA[result];
+            const images = isSBTI ? SBTI_IMAGES[result] : MBTI_IMAGES[result];
+            const randomImage = images[Math.floor(Math.random() * images.length)] || "https://s.showimg.link/XMJwqN8ofy.webp";
+
             await supabase.from('user_profiles').upsert({
                 user_id: session.user_id,
                 [session.type]: result
-            });
-
-            await sendTestResult(client, {
-                userId: session.user_id,
-                guild_id: session.guild_id,
-                channelId: session.channel_id,
-                type: session.type,
-                result: result
             });
 
             await supabase.from('user_mbti_sessions').update({ 
@@ -79,7 +78,30 @@ function startDashboard(client) {
                 completed_at: new Date().toISOString()
             }).eq('id', sessionId);
 
-            res.json({ success: true, result });
+            res.json({ 
+                success: true, 
+                result, 
+                cat_type: data.cat_type,
+                image_url: randomImage
+            });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    app.post('/api/share', async (req, res) => {
+        try {
+            const { sessionId, result } = req.body;
+            const { data: session, error } = await supabase.from('user_mbti_sessions').select('*').eq('id', sessionId).single();
+            if (error || !session) return res.status(404).json({ error: 'Session not found เมี๊ยว🐾' });
+
+            await sendTestResult(client, {
+                userId: session.user_id,
+                guildId: session.guild_id,
+                channelId: session.channel_id,
+                type: session.type,
+                result: result
+            });
+
+            res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
