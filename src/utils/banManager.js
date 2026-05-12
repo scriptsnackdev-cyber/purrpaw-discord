@@ -89,7 +89,6 @@ async function banUser(interaction, targetMember, minutes, reason) {
         if (dbError) throw dbError;
 
         // 6. ถอดยศเดิมออก (ที่ถอดได้) และใส่ยศแบนเมี๊ยว🐾
-        // เราจะไม่ใช้ .set() เพราะจะติดเรื่องยศที่บอทจัดการไม่ได้ (เช่น ยศ Booster หรือยศที่ถูกคุมโดย Integration อื่น)
         const rolesToRemove = targetMember.roles.cache.filter(role => 
             role.name !== '@everyone' && 
             !role.managed && 
@@ -98,13 +97,12 @@ async function banUser(interaction, targetMember, minutes, reason) {
 
         try {
             if (rolesToRemove.size > 0) {
-                await targetMember.roles.remove(rolesToRemove, `Banning: ${reason}`);
+                await targetMember.roles.remove(rolesToRemove, `Banning: ${reason}`).catch(err => console.log(`[BanManager] Partial role removal: ${err.message}`));
             }
-            await targetMember.roles.add(banRole, `Banned for ${minutes}m: ${reason}`);
+            await targetMember.roles.add(banRole, `Banned for ${minutes}m: ${reason}`).catch(err => console.log(`[BanManager] Ban role assignment failed (High rank user?): ${err.message}`));
         } catch (roleError) {
-            console.error('[BanManager] Role Manipulation Error:', roleError);
-            // ถ้าเฟลตรงนี้ อาจจะเป็นเพราะสิทธิ์ขัดกันจริงๆ
-            return interaction.editReply({ content: '❌ บอทไม่สามารถจัดการยศของสมาชิกคนนี้ได้เมี๊ยว🐾 แม้จะเช็คเบื้องต้นผ่านแล้ว โปรดตรวจสอบว่าบอทมีสิทธิ์ Administrator หรืออยู่สูงกว่าสมาชิกคนนี้จริงๆ นะ!' });
+            console.error('[BanManager] Role Manipulation Critical Error:', roleError);
+            // ดำเนินการต่อเพื่อให้ประกาศและการ์ดยังทำงานได้เมี๊ยว🐾
         }
 
         // 7. ประกาศการลงโทษแบบนิรนาม (ส่งเข้าห้องโดยไม่ระบุชื่อคนแบน) เมี๊ยว🐾
