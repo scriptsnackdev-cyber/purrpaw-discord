@@ -116,7 +116,8 @@ async function startTest(interaction) {
         return rows;
     };
 
-    await interaction.reply({
+    const method = interaction.replied || interaction.deferred ? 'editReply' : 'reply';
+    await interaction[method]({
         embeds: [getEmbed(0)],
         components: getRows(0),
         ephemeral: true

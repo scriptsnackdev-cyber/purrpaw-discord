@@ -264,29 +264,50 @@ module.exports = {
                     if (isSBTI && features.sbti === false) return interaction.reply({ content: '❌ ระบบ SBTI ถูกปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
                     if (!isSBTI && features.mbti === false) return interaction.reply({ content: '❌ ระบบ MBTI ถูกปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
 
-                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                    const embed = new EmbedBuilder()
+                        .setTitle(`🧠 เลือกช่องทางการทำแบบทดสอบ ${isSBTI ? 'SBTI' : 'MBTI'}`)
+                        .setDescription(`🐾 **เลือกได้เลยว่าอยากทำแบบไหนนะเมี๊ยว!**\n\n✨ **แบบเว็บไซต์ (แนะนำ):** กราฟิกสวยงาม ลื่นไหล และแชร์ผลลัพธ์ได้ง่ายกว่า\n💬 **แบบ Discord:** ทำผ่านปุ่มในห้องแชทนี้ได้ทันทีเลยเมี๊ยว!`)
+                        .setColor(isSBTI ? 0xEC4899 : 0x3B82F6);
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`${customId}_web`)
+                            .setLabel('🚀 ทำบนเว็บไซต์ (แนะนำ)')
+                            .setStyle(ButtonStyle.Success),
+                        new ButtonBuilder()
+                            .setCustomId(`${customId}_discord`)
+                            .setLabel('💬 ทำใน Discord')
+                            .setStyle(ButtonStyle.Primary)
+                    );
+
+                    return interaction.reply({ embeds: [embed], components: [row], flags: [MessageFlags.Ephemeral] });
+                }
+
+                // --- จัดการการเลือก Web / Discord ---
+                else if (customId.endsWith('_web')) {
+                    const baseId = customId.replace('_web', '');
+                    const isSBTI = baseId === 'sbti_start';
+                    
+                    await interaction.deferUpdate();
 
                     try {
-                        // 1. สร้าง Session ใน Database เพื่อความปลอดภัยและเก็บ Context เมี๊ยว🐾
                         const { data: session, error } = await supabase.from('user_mbti_sessions').insert({
                             user_id: user.id,
                             guild_id: guild.id,
                             channel_id: interaction.channelId,
                             type: isSBTI ? 'sbti' : 'mbti',
-                            expires_at: new Date(Date.now() + 30 * 60000).toISOString() // หมดอายุใน 30 นาทีเมี๊ยว🐾
+                            expires_at: new Date(Date.now() + 30 * 60000).toISOString()
                         }).select().single();
 
                         if (error) throw error;
 
-                        // 2. สร้าง Link (ดึงมาจาก .env เพื่อความยืดหยุ่นเมี๊ยว🐾)
                         const baseUrl = process.env.WEB_BASE_URL || 'http://localhost:3000';
                         const uniqueUrl = `${baseUrl}/${isSBTI ? 'sbti' : 'mbti'}?sessionId=${session.id}`;
 
                         const embed = new EmbedBuilder()
-                            .setTitle(`🧠 แบบทดสอบ ${isSBTI ? 'SBTI' : 'MBTI'} สไตล์ PurrPaw 🐾`)
-                            .setDescription(`✨ **มาค้นหาตัวตนของคุณบนเว็บไซต์ได้แล้วเมี๊ยว!**\n\n🔗 [กดตรงนี้เพื่อเริ่มทำแบบทดสอบ](${uniqueUrl})\n\n*ทิป: เมื่อทำเสร็จแล้วคุณสามารถกดแชร์ผลลัพธ์กลับมาที่ห้องนี้ได้ทันทีเลยนะเมี๊ยววว!*`)
-                            .setColor(isSBTI ? 0xEC4899 : 0x3B82F6)
-                            .setThumbnail(isSBTI ? 'https://s.showimg.link/SBTI_ICON.png' : 'https://s.showimg.link/MBTI_ICON.png');
+                            .setTitle(`🚀 ลิงก์ทำแบบทดสอบ ${isSBTI ? 'SBTI' : 'MBTI'} บนเว็บ`)
+                            .setDescription(`✨ **กดลิงก์ด้านล่างเพื่อเริ่มทำได้เลยเมี๊ยว!**\n\n🔗 [กดตรงนี้เพื่อเริ่มทำแบบทดสอบ](${uniqueUrl})\n\n*หมายเหตุ: ลิงก์นี้มีอายุ 30 นาทีนะเมี๊ยว🐾*`)
+                            .setColor(isSBTI ? 0xEC4899 : 0x3B82F6);
 
                         const row = new ActionRowBuilder().addComponents(
                             new ButtonBuilder()
@@ -297,8 +318,23 @@ module.exports = {
 
                         return interaction.editReply({ embeds: [embed], components: [row] });
                     } catch (err) {
-                        console.error('MBTI/SBTI Session Error:', err);
-                        return interaction.editReply({ content: 'งื้อออ เกิดข้อผิดพลาดในการสร้างเซสชันเมี๊ยว! กรุณาลองใหม่อีกครั้งนะ🐾' });
+                        console.error('Web Link Error:', err);
+                        return interaction.editReply({ content: 'งื้อออ เกิดข้อผิดพลาดเมี๊ยว!', components: [] });
+                    }
+                }
+
+                else if (customId.endsWith('_discord')) {
+                    const baseId = customId.replace('_discord', '');
+                    const isSBTI = baseId === 'sbti_start';
+                    
+                    await interaction.deferUpdate();
+
+                    if (isSBTI) {
+                        const { startTest } = require('../../commands/mbti/sbti');
+                        return await startTest(interaction);
+                    } else {
+                        const { startTest } = require('../../commands/mbti/mbti');
+                        return await startTest(interaction);
                     }
                 }
 
