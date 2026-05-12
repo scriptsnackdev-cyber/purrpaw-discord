@@ -647,7 +647,7 @@ ${roomStatusXml}`;
                         const lastImage = message.client.imageCooldowns.get(message.channelId) || 0;
                         const now = Date.now();
                         
-                        if (now - lastImage > 300000) { // 5 นาที
+                        if (now - lastImage > 120000) { // 2 นาที
                             message.client.imageCooldowns.set(message.channelId, now);
                             
                             (async () => {
