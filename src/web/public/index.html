@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PurrPaw MBTI Test - ค้นหาตัวตนสไตล์แมวเมี๊ยว</title>
     <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://openfpcdn.io/fingerprintjs/v4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
     <style>
         :root {
             --primary: #3b82f6;
@@ -245,7 +245,7 @@
         let sessionData = null;
         let visitorId = null;
 
-        // ── Fingerprint Init ──
+        // ── Fingerprint Init (UMD Version) ──
         const fpPromise = FingerprintJS.load();
 
         function getDeviceInfo() {

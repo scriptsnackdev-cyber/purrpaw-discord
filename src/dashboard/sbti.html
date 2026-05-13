@@ -8,7 +8,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Sarabun:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap"
         rel="stylesheet">
-    <script src="https://openfpcdn.io/fingerprintjs/v4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@4/dist/fp.min.js"></script>
     <style>
         :root {
             --crimson: #e11d48;
@@ -860,7 +860,7 @@
         let sessionData = null;
         let visitorId = null;
 
-        // ── Fingerprint Init ──
+        // ── Fingerprint Init (UMD Version) ──
         const fpPromise = FingerprintJS.load();
 
         function getDeviceInfo() {
