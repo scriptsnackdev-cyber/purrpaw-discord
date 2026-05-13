@@ -25,13 +25,19 @@ module.exports.sendMusicMessage = async (channel, embeds = [], components = []) 
         const personaName = guildData?.settings?.bot_name;
         const personaAvatar = guildData?.settings?.bot_avatar;
 
-        // 2. ถ้าไม่มี Persona → ใช้ channel.send ปกติเมี๊ยว
+        // 2. ถ้ามีปุ่มหรือ components ให้ส่งด้วย bot message ปกติ
+        //    เพื่อให้ Discord จับ interaction ของปุ่มได้เสถียรที่สุด
+        if (components?.length > 0) {
+            const msg = await channel.send({ embeds, components }).catch(() => null);
+            return { msg, webhook: null };
+        }
+
+        // 3. ถ้าไม่มีปุ่มและมี Persona → ส่งผ่าน Webhook
         if (!personaName && !personaAvatar) {
             const msg = await channel.send({ embeds, components }).catch(() => null);
             return { msg, webhook: null };
         }
 
-        // 3. หา Webhook เดิม (ชื่อ PurrPaw-Music) ถ้าไม่มีให้สร้างใหม่
         const webhooks = await channel.fetchWebhooks();
         let webhook = webhooks.find(wh => wh.name === 'PurrPaw-Music');
 
@@ -42,7 +48,6 @@ module.exports.sendMusicMessage = async (channel, embeds = [], components = []) 
             });
         }
 
-        // 4. ส่งข้อความผ่าน Webhook
         const msg = await webhook.send({
             embeds,
             components,

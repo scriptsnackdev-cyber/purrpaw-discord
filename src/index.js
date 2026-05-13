@@ -6,25 +6,47 @@ const { promisify } = require('util');
 const { io } = require('socket.io-client');
 const { Client, Collection, GatewayIntentBits, REST, Routes } = require('discord.js');
 const { DisTube, Song } = require('distube');
+const ffmpegStatic = require('ffmpeg-static');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const TTSManager = require('./utils/ttsManager');
 const supabase = require('./supabaseClient');
 const { initDailyScheduler } = require('./utils/dailyScheduler');
 const { registerSystemFonts } = require('./utils/fontHelper');
 
+// 🎨 ลงทะเบียนฟอนต์สำหรับทั้งระบบเมี๊ยว🐾
 registerSystemFonts();
-const execFileAsync = promisify(execFile);
-const YTDLP_PATH = process.platform === 'win32' ? path.join(__dirname, '..', 'yt-dlp.exe') : (fs.existsSync(path.join(__dirname, '..', 'yt-dlp')) ? path.join(__dirname, '..', 'yt-dlp') : 'yt-dlp');
 
+const execFileAsync = promisify(execFile);
+
+// ── Path ของ yt-dlp ──
+const isWindows = process.platform === 'win32';
+const YTDLP_PATH = isWindows 
+    ? path.join(__dirname, '..', 'yt-dlp.exe') 
+    : (fs.existsSync(path.join(__dirname, '..', 'yt-dlp')) 
+        ? path.join(__dirname, '..', 'yt-dlp') 
+        : 'yt-dlp');
+
+console.log(`🎵 yt-dlp path: ${YTDLP_PATH} (System: ${process.platform})`);
+
+// ── Helper: เรียก yt-dlp ──
 async function ytdlp(args, useCookie = true) {
     const finalArgs = [...args];
     if (useCookie) {
-        const cp = path.join(__dirname, '..', 'cookies.txt');
-        if (fs.existsSync(cp)) finalArgs.push('--cookies', cp);
-        else if (process.env.YOUTUBE_COOKIE) finalArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
+        const cookiePath = path.join(__dirname, '..', 'cookies.txt');
+        if (fs.existsSync(cookiePath)) {
+            finalArgs.push('--cookies', cookiePath);
+        } else if (process.env.YOUTUBE_COOKIE) {
+            finalArgs.push('--add-header', `Cookie:${process.env.YOUTUBE_COOKIE}`);
+        }
     }
     finalArgs.push('--no-check-certificates', '--prefer-free-formats', '--add-header', 'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36');
+
     try {
-        const { stdout } = await execFileAsync(YTDLP_PATH, finalArgs, { timeout: 30000, maxBuffer: 1024 * 1024 * 50, windowsHide: true });
+        const { stdout } = await execFileAsync(YTDLP_PATH, finalArgs, {
+            timeout: 30000,
+            maxBuffer: 1024 * 1024 * 50,
+            windowsHide: true,
+        });
         return JSON.parse(stdout);
     } catch (err) {
         if (useCookie && process.env.YOUTUBE_COOKIE) return ytdlp(args, false);
@@ -32,19 +54,47 @@ async function ytdlp(args, useCookie = true) {
     }
 }
 
+// ── Custom yt-dlp Plugin สำหรับ DisTube ──
 const ytdlpPlugin = {
-    type: 'extractor', name: 'yt-dlp-custom', init() {},
-    async validate(url) { return url.includes('youtube.com') || url.includes('youtu.be') || !url.startsWith('http'); },
+    type: 'extractor',
+    name: 'yt-dlp-custom',
+    init() {},
+    async validate(url) {
+        return url.includes('youtube.com') || url.includes('youtu.be') || !url.startsWith('http');
+    },
     async resolve(url, options = {}) {
-        const info = await ytdlp(['--dump-single-json', '--no-warnings', '--skip-download', '--simulate', '--no-playlist', url.replace(/[?&]list=[^&]*/g, '')]);
-        return new Song({ plugin: ytdlpPlugin, source: 'youtube', playFromSource: true, id: info.id, name: info.title || info.fulltitle, url: info.webpage_url || info.original_url, duration: info.is_live ? 0 : (info.duration || 0), isLive: info.is_live || false, thumbnail: info.thumbnail, uploader: { name: info.uploader || 'Unknown', url: info.uploader_url || '' } }, { member: options.member });
+        const cleanUrl = url.replace(/[?&]list=[^&]*/g, '').replace(/[?&]index=[^&]*/g, '');
+        const info = await ytdlp(['--dump-single-json', '--no-warnings', '--skip-download', '--simulate', '--no-playlist', cleanUrl]);
+        return new Song({
+            plugin: ytdlpPlugin,
+            source: 'youtube',
+            playFromSource: true,
+            id: info.id,
+            name: info.title || info.fulltitle,
+            url: info.webpage_url || info.original_url,
+            duration: info.is_live ? 0 : (info.duration || 0),
+            isLive: info.is_live || false,
+            thumbnail: info.thumbnail,
+            uploader: { name: info.uploader || 'Unknown', url: info.uploader_url || '' },
+        }, { member: options.member });
     },
     async searchSong(query, options = {}) {
         try {
             const info = await ytdlp(['--dump-single-json', '--no-warnings', '--skip-download', '--simulate', '--no-playlist', '--flat-playlist', `ytsearch1:${query}`]);
             const entry = info.entries?.[0] || info;
             if (!entry || !entry.id) return null;
-            return new Song({ plugin: ytdlpPlugin, source: 'youtube', playFromSource: true, id: entry.id, name: entry.title || 'Unknown', url: entry.webpage_url || entry.url || `https://www.youtube.com/watch?v=${entry.id}`, duration: entry.duration || 0, isLive: entry.is_live || false, thumbnail: entry.thumbnail || null, uploader: { name: entry.uploader || 'Unknown', url: '' } }, { member: options.member });
+            return new Song({
+                plugin: ytdlpPlugin,
+                source: 'youtube',
+                playFromSource: true,
+                id: entry.id,
+                name: entry.title || 'Unknown',
+                url: entry.webpage_url || entry.url || `https://www.youtube.com/watch?v=${entry.id}`,
+                duration: entry.duration || 0,
+                isLive: entry.is_live || false,
+                thumbnail: entry.thumbnail || entry.thumbnails?.[0]?.url || null,
+                uploader: { name: entry.uploader || entry.channel || 'Unknown', url: '' },
+            }, { member: options.member });
         } catch (e) { return null; }
     },
     async getStreamURL(song) {
@@ -53,37 +103,86 @@ const ytdlpPlugin = {
     }
 };
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates] });
-client.distube = new DisTube(client, { ffmpeg: { path: fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : (require('ffmpeg-static').path || 'ffmpeg') }, emitNewSongOnly: true, plugins: [ytdlpPlugin] });
+// ── Discord Client Setup ──
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildPresences,
+    ]
+});
+
+const ffmpegPaths = [
+    '/usr/bin/ffmpeg',
+    '/usr/local/bin/ffmpeg',
+    ffmpegInstaller?.path,
+    ffmpegStatic || null,
+].filter(Boolean);
+
+const ffmpegPath = ffmpegPaths.find(p => fs.existsSync(p)) || 'ffmpeg';
+
+client.distube = new DisTube(client, {
+    ffmpeg: { path: ffmpegPath },
+    emitNewSongOnly: true,
+    plugins: [ytdlpPlugin],
+});
+
 client.commands = new Collection();
 client.ttsManager = new TTSManager(client);
 
+// 📂 โหลดคำสั่ง
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
-    fs.readdirSync(commandsPath).forEach(folder => {
-        const fp = path.join(commandsPath, folder);
-        if (fs.lstatSync(fp).isDirectory()) {
-            fs.readdirSync(fp).filter(f => f.endsWith('.js')).forEach(file => {
-                const cmd = require(path.join(fp, file));
-                if (cmd.data && cmd.execute) client.commands.set(cmd.data.name, cmd);
-            });
+    const commandFolders = fs.readdirSync(commandsPath);
+    for (const folder of commandFolders) {
+        const folderPath = path.join(commandsPath, folder);
+        if (fs.lstatSync(folderPath).isDirectory()) {
+            const commandFiles = fs.readdirSync(folderPath).filter(file => file.endsWith('.js'));
+            for (const file of commandFiles) {
+                const command = require(path.join(folderPath, file));
+                if (command.data && command.execute) client.commands.set(command.data.name, command);
+            }
         }
+    }
+}
+
+// 📂 โหลด Handlers
+const handlersPath = path.join(__dirname, 'handlers');
+if (fs.existsSync(handlersPath)) {
+    fs.readdirSync(handlersPath).filter(f => f.endsWith('.js')).forEach(file => {
+        require(`./handlers/${file}`)(client);
     });
 }
 
-const handlersPath = path.join(__dirname, 'handlers');
-if (fs.existsSync(handlersPath)) {
-    fs.readdirSync(handlersPath).filter(f => f.endsWith('.js')).forEach(file => require(`./handlers/${file}`)(client));
-}
+// ── ระบบจัดการ AI Chat Cleanup & Private Room Cleanup ──
+const { cleanupExpiredSessions } = require('./utils/aiCleanup');
+const { cleanupPrivateRooms, warnPrivateRooms } = require('./utils/privateRoomCleanup');
+const { cleanupExpiredBans } = require('./utils/banManager');
 
 client.once('clientReady', async () => {
     console.log(`✅ บอทออนไลน์แล้วเมี๊ยว: ${client.user.tag}`);
     try {
         const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-        const cmdsJSON = Array.from(client.commands.values()).map(c => c.data.toJSON());
-        const { data: gs } = await supabase.from('guilds').select('id');
-        if (gs) for (const g of gs) await rest.put(Routes.applicationGuildCommands(client.user.id, g.id), { body: cmdsJSON }).catch(() => {});
-    } catch (e) {}
+        const commandsJSON = Array.from(client.commands.values()).map(c => c.data.toJSON());
+        const { data: allGuilds } = await supabase.from('guilds').select('id');
+        if (allGuilds) {
+            for (const g of allGuilds) {
+                await rest.put(Routes.applicationGuildCommands(client.user.id, g.id), { body: commandsJSON }).catch(() => {});
+            }
+        }
+    } catch (err) {}
+    
+    // รัน Cleanup ทุกนาที
+    setInterval(() => {
+        cleanupExpiredSessions(client);
+        cleanupPrivateRooms(client);
+        warnPrivateRooms(client);
+        cleanupExpiredBans(client);
+    }, 1000 * 60);
+
     initDailyScheduler(client);
 });
 
@@ -93,10 +192,14 @@ const socket = io(DASHBOARD_URL, { reconnection: true });
 
 client.emitMusicUpdate = (guildId) => {
     const q = client.distube.getQueue(guildId);
-    if (!q || !q.songs.length) return socket.emit('music_update', { guildId, current: null, queue: [], paused: false, volume: 50, currentTime: 0 });
+    if (!q || !q.songs.length) {
+        socket.emit('music_update', { guildId, current: null, queue: [], paused: false, volume: 50, currentTime: 0 });
+        return;
+    }
     const s = q.songs[0];
     socket.emit('music_update', {
-        guildId, current: { name: s.name, thumbnail: s.thumbnail, duration: s.duration, uploader: s.uploader?.name || 'Unknown', url: s.url },
+        guildId,
+        current: { name: s.name, thumbnail: s.thumbnail, duration: s.duration, uploader: s.uploader?.name || 'Unknown', url: s.url },
         queue: q.songs.map(x => ({ name: x.name, thumbnail: x.thumbnail, duration: x.duration, member: x.member?.displayName || 'ทาสแมว' })),
         paused: q.paused, volume: q.volume, currentTime: q.currentTime
     });
@@ -107,7 +210,7 @@ socket.on('connect', () => {
     client.guilds.cache.forEach(g => socket.emit('join_guild', g.id));
 });
 
-// 🚨 หัวใจหลัก: รับคำสั่งจากหน้าเว็บ
+// รับคำสั่งควบคุมเพลง
 socket.on('bot_command', async (data) => {
     const { guildId, action, value } = data;
     const q = client.distube.getQueue(guildId);
@@ -117,7 +220,9 @@ socket.on('bot_command', async (data) => {
         switch (action) {
             case 'toggle': q.paused ? q.resume() : q.pause(); break;
             case 'skip': await q.skip().catch(() => q.stop()); break;
+            case 'previous': await q.previous().catch(() => { }); break;
             case 'volume': q.setVolume(value); break;
+            case 'seek': q.seek(value); break;
             case 'play':
                 const g = client.guilds.cache.get(guildId);
                 const vc = g.members.me.voice.channel || g.channels.cache.find(c => c.type === 2);
@@ -131,8 +236,10 @@ socket.on('bot_command', async (data) => {
 setInterval(() => {
     client.guilds.cache.forEach(g => {
         const q = client.distube.getQueue(g.id);
-        if (q && !q.paused) client.emitMusicUpdate(g.id);
+        // เฉพาะถ้าเล่นอยู่และไม่หยุดชั่วคราว ถึงจะส่งอัปเดตเมี๊ยว🐾
+        if (q && !q.paused && q.songs.length > 0) client.emitMusicUpdate(g.id);
     });
-}, 3000);
+}, 5000); // ปรับเป็น 5 วินาทีเพื่อลดโหลดเมี๊ยว🐾
+
 
 client.login(process.env.DISCORD_TOKEN);

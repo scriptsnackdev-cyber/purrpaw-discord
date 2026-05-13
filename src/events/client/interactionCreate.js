@@ -240,6 +240,15 @@ module.exports = {
                     const removeRole = removeRoleId ? guild.roles.cache.get(removeRoleId) : null;
 
                     try {
+                        // เช็คสิทธิ์บอทเบื้องต้น
+                        if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
+                            return interaction.reply({ content: '❌ บอทไม่มีสิทธิ์จัดการยศเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+                        }
+
+                        if (addRole && addRole.position >= guild.members.me.roles.highest.position) {
+                            return interaction.reply({ content: `❌ ยศ **${addRole.name}** สูงเกินความสามารถของบอทเmi๊ยว🐾`, flags: [MessageFlags.Ephemeral] });
+                        }
+
                         if (addRole) await member.roles.add(addRole);
                         if (removeRole && member.roles.cache.has(removeRole.id)) {
                             await member.roles.remove(removeRole);
@@ -247,7 +256,65 @@ module.exports = {
                         return interaction.reply({ content: `✨ **ยืนยันตัวตนสำเร็จ!** ยินดีต้อนรับเข้าบ้านอย่างเป็นทางการนะเมี๊ยววว! 🐾`, flags: [MessageFlags.Ephemeral] });
                     } catch (e) {
                         console.error('Verify button error:', e);
-                        return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการจัดการยศเมี๊ยว (บอทอาจมียศต่ำกว่ายศนั้น)', flags: [MessageFlags.Ephemeral] });
+                        return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการจัดการยศเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
+                    }
+                }
+
+                // --- 🎵 ระบบ Music Controller Buttons ──
+                else if (customId.startsWith('music_')) {
+                    const queue = interaction.client.distube.getQueue(guild.id);
+                    
+                    // ปุ่มเพิ่มเพลง (ไม่ต้องมี Queue ก็กดได้)
+                    if (customId === 'music_add_modal') {
+                        const modal = new ModalBuilder().setCustomId('music_add_modal_submit').setTitle('➕ เพิ่มเพลงเข้าคิวเมี๊ยว🐾');
+                        const input = new TextInputBuilder()
+                            .setCustomId('music_query_input')
+                            .setLabel('พิมพ์ชื่อเพลงหรือลิงก์ YouTube')
+                            .setStyle(TextInputStyle.Short)
+                            .setPlaceholder('เช่น Dandelions หรือลิงก์...')
+                            .setRequired(true);
+                        modal.addComponents(new ActionRowBuilder().addComponents(input));
+                        return await interaction.showModal(modal);
+                    }
+
+                    if (!queue) return interaction.reply({ content: '❌ ตอนนี้ไม่ได้เล่นเพลงอยู่เมี๊ยว🐾', flags: [MessageFlags.Ephemeral] });
+
+                    try {
+                        // ใช้ deferUpdate เพื่อความลื่นไหลของปุ่มเมี๊ยว🐾
+                        if (customId !== 'music_queue_btn') await interaction.deferUpdate().catch(() => {});
+
+                        switch (customId) {
+                            case 'music_skip':
+                                await queue.skip().catch(() => queue.stop());
+                                break;
+                            case 'music_pause':
+                                queue.paused ? queue.resume() : queue.pause();
+                                break;
+                            case 'music_leave':
+                                queue.stop();
+                                break;
+                            case 'music_loop':
+                                const mode = queue.repeatMode === 1 ? 0 : 1;
+                                queue.setRepeatMode(mode);
+                                break;
+                            case 'music_mute':
+                                queue.setVolume(queue.volume === 0 ? 50 : 0);
+                                break;
+                            case 'music_autoplay':
+                                queue.toggleAutoplay();
+                                break;
+                            case 'music_queue_btn':
+                                const qMsg = queue.songs.slice(0, 10).map((s, i) => `${i === 0 ? '▶️' : `${i}.`} **${s.name}**`).join('\n');
+                                await interaction.reply({ content: `📋 **คิวเพลงปัจจุบัน:**\n${qMsg}\n${queue.songs.length > 10 ? `...และอีก ${queue.songs.length - 10} เพลงเmi๊ยว🐾` : ''}`, flags: [MessageFlags.Ephemeral] });
+                                break;
+                        }
+                        
+                        // อัปเดตหน้าเว็บเมี๊ยว🐾
+                        if (interaction.client.emitMusicUpdate) interaction.client.emitMusicUpdate(guild.id);
+                        
+                    } catch (err) {
+                        console.error('Button Error:', err);
+                        await interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการกดปุ่มเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
                     }
                 }
 
@@ -1141,6 +1208,27 @@ module.exports = {
             // 📝 3. จัดการกรณีเป็น Modal Submit
             else if (interaction.isModalSubmit()) {
                 const { customId, guild, user, fields } = interaction;
+
+                // --- 🎵 ระบบเพิ่มเพลงผ่าน Modal ---
+                if (customId === 'music_add_modal_submit') {
+                    const query = fields.getTextInputValue('music_query_input');
+                    const voiceChannel = interaction.member.voice.channel;
+                    
+                    if (!voiceChannel) return interaction.reply({ content: '❌ คุณต้องอยู่ในห้องเสียงก่อนนะเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+                    
+                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                    
+                    try {
+                        await interaction.client.distube.play(voiceChannel, query, {
+                            member: interaction.member,
+                            textChannel: interaction.channel,
+                            metadata: { interaction }
+                        });
+                        return await interaction.editReply({ content: `🔍 กำลังค้นหาและเตรียมเพลง **${query}** ให้ผู้นะเมี๊ยวว!🐾` });
+                    } catch (err) {
+                        return await interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการเล่นเพลงเมี๊ยว...' });
+                    }
+                }
 
                 // --- แบบฟอร์มปกติ ---
                 if (customId.startsWith('form_submit:')) {

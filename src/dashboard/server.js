@@ -4,12 +4,8 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
-const { Client, GatewayIntentBits } = require('discord.js');
-const supabase = require('../supabaseClient');
-const { MBTI_DATA, SBTI_DATA } = require('../utils/mbtiShared');
+// client initialization removed to prevent dual-login session conflictsเมี๊ยว🐾
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-client.login(process.env.DISCORD_TOKEN).catch(() => {});
 
 const app = express();
 const server = http.createServer(app);

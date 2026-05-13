@@ -14,6 +14,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());เมี๊ยว🐾
+
+
 // ── Helper: ดึง IP Address ของผู้ใช้เมี๊ยว🐾 ──
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for']?.split(',')[0] || req.ip || req.socket.remoteAddress;

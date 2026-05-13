@@ -25,9 +25,9 @@ module.exports = {
         }
 
         // ── 📝 ระบบบันทึกการแนะนำตัวและวันเกิดอัตโนมัติ (Auto Intro & Birthday Tracking) ──
-        const introChannelId = settings.ai_chat?.intro_channel_id || '1482445140810399928';
-        const botIntroChannelId = '1486316042824188025';
-        const birthdayChannelId = settings.ai_chat?.birthday_channel_id || '1503011148545396897';
+        const introChannelId = settings.intro_channel_id;
+        const botIntroChannelId = settings.bot_intro_channel_id;
+        const birthdayChannelId = settings.birthday_channel_id;
 
         const isIntro = message.channel.id === introChannelId;
         const isBotIntro = message.channel.id === botIntroChannelId;
