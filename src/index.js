@@ -47,7 +47,7 @@ async function ytdlp(args, useCookie = true) {
     }
 
     // เพิ่ม flag พื้นฐานเพื่อความเสถียรเมี๊ยว🐾
-    finalArgs.push('--no-check-certificates');
+    finalArgs.push('--no-check-certificates', '--prefer-free-formats', '--add-header', 'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36');
 
     try {
         const { stdout } = await execFileAsync(YTDLP_PATH, finalArgs, {
@@ -83,8 +83,8 @@ const ytdlpPlugin = {
     init() {},
 
     async validate(url) {
-        // ให้ Plugin นี้จัดการทั้งหมด (รวมถึงการ Search ด้วยชื่อเพลง) เมี๊ยว🐾
-        return true;
+        // รองรับทั้งลิงก์ YouTube และการค้นหาทั่วไปเมี๊ยว🐾
+        return url.includes('youtube.com') || url.includes('youtu.be') || !url.startsWith('http');
     },
 
     // ── เปิดเพลงจาก URL ──
@@ -154,20 +154,26 @@ const ytdlpPlugin = {
     // ── ดึง Stream URL สำหรับ FFmpeg ──
     async getStreamURL(song) {
         console.log(`[yt-dlp] Getting stream URL for: ${song.name} (${song.url})`);
-        const info = await ytdlp([
-            '--dump-single-json', '--no-warnings',
-            '--skip-download', '--simulate', '--no-playlist',
-            '--format', 'ba/ba*',  // best audio only
-            song.url,
-        ]);
-        
-        if (!info.url) {
-            console.error(`[yt-dlp] No stream URL found in metadata for: ${song.name}`);
-            throw new Error('No stream URL found');
+        try {
+            const info = await ytdlp([
+                '--dump-single-json', '--no-warnings',
+                '--skip-download', '--simulate', '--no-playlist',
+                '--format', 'bestaudio/best', // ปรับมาใช้ตัวนี้แทนเพื่อความครอบคลุมเมี๊ยว🐾
+                song.url,
+            ]);
+            
+            if (!info.url) {
+                throw new Error('No stream URL found in metadata');
+            }
+            
+            console.log(`[yt-dlp] Got stream URL ✅ (Type: ${info.ext || 'unknown'})`);
+            return info.url;
+        } catch (err) {
+            console.error(`[yt-dlp] getStreamURL error: ${err.message}`);
+            // บันทึกลงไฟล์เพื่อดูภายหลังเมี๊ยว🐾
+            fs.appendFileSync('music_error.log', `[${new Date().toLocaleString()}] Stream Error: ${err.message} | Song: ${song.name}\n`);
+            throw err;
         }
-        
-        console.log(`[yt-dlp] Got stream URL ✅ (Type: ${info.ext || 'unknown'})`);
-        return info.url;
     },
 
     // ── ดึงเพลงแนะนำสำหรับ Autoplay ──
@@ -223,7 +229,11 @@ const client = new Client({
 });
 
 client.distube = new DisTube(client, {
-    ffmpeg: { path: fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : (fs.existsSync('/usr/local/bin/ffmpeg') ? '/usr/local/bin/ffmpeg' : require('ffmpeg-static')) },
+    ffmpeg: { 
+        path: fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 
+              (fs.existsSync('/usr/local/bin/ffmpeg') ? '/usr/local/bin/ffmpeg' : 
+              (typeof require('ffmpeg-static') === 'string' ? require('ffmpeg-static') : require('ffmpeg-static').path)) 
+    },
     emitNewSongOnly: true,
     emitAddSongWhenCreatingQueue: false,
     emitAddListWhenCreatingQueue: false,
@@ -275,7 +285,7 @@ const { cleanupExpiredBans } = require('./utils/banManager');
 
 const { REST, Routes } = require('discord.js');
 
-client.once('clientReady', async () => {
+client.once('ready', async () => {
     console.log(`✅ บอทออนไลน์แล้วเมี๊ยว: ${client.user.tag}`);
 
 
