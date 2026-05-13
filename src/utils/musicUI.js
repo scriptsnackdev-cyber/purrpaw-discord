@@ -53,7 +53,7 @@ function generateMusicPanel(queue) {
         new ButtonBuilder().setCustomId('music_add_modal').setLabel('➕ เพิ่มเพลง').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
             .setLabel('🌐 เว็บควบคุม')
-            .setURL(`${process.env.WEB_BASE_URL || 'http://localhost:3000'}/music-panel?guildId=${queue.textChannel.guildId}`)
+            .setURL(`${process.env.WEB_BASE_URL || 'http://localhost:3000'}/music-panel?guildId=${queue.id}`)
             .setStyle(ButtonStyle.Link),
     );
 

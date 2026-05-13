@@ -20,7 +20,7 @@ module.exports = (client) => {
             queue._liveInterval = setInterval(async () => {
                 try {
                     if (queue._activeMessageId !== currentMsgId) return clearInterval(queue._liveInterval);
-                    const currentQueue = client.distube.getQueue(queue.textChannel.guildId);
+                    const currentQueue = client.distube.getQueue(queue.id);
                     if (!currentQueue || !currentQueue.songs.length || currentQueue.paused) return;
 
                     const { embeds: updateEmbeds, components: updateComponents } = generateMusicPanel(currentQueue);

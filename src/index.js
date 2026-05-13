@@ -130,8 +130,8 @@ client.distube = new DisTube(client, {
     ffmpeg: { path: ffmpegPath },
     emitNewSongOnly: true,
     plugins: [
-        new YouTubePlugin(), // เพิ่มตัวนี้เพื่อให้หาเพลง Related (Autoplay) ได้เมี๊ยว🐾
-        ytdlpPlugin
+        ytdlpPlugin, // ให้สิทธิ์ตัว Custom จัดการก่อนเพื่อเลี่ยงการโดนบล็อกเมี๊ยว🐾
+        new YouTubePlugin() // ตัวนี้ช่วยเรื่องหาเพลง Related (Autoplay)
     ],
 });
 
