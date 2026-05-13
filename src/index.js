@@ -58,7 +58,9 @@ async function ytdlp(args, useCookie = true) {
 const ytdlpPlugin = {
     type: 'extractor',
     name: 'yt-dlp-custom',
-    init() {},
+    init(distube) {
+        this.distube = distube;
+    },
     async validate(url) {
         return url.includes('youtube.com') || url.includes('youtu.be') || !url.startsWith('http');
     },
@@ -100,6 +102,16 @@ const ytdlpPlugin = {
     async getStreamURL(song) {
         const info = await ytdlp(['--dump-single-json', '--no-warnings', '--skip-download', '--simulate', '--no-playlist', '--format', 'bestaudio/best', song.url]);
         return info.url;
+    },
+    async getRelatedSongs(song) {
+        if (song.source !== 'youtube') return [];
+        try {
+            // ค้นหาเพลงที่คล้ายกับเพลงปัจจุบันเมี๊ยว🐾
+            const results = await this.distube.search(song.name, { limit: 5 });
+            return results.filter(s => s.id !== song.id);
+        } catch (e) {
+            return [];
+        }
     }
 };
 
