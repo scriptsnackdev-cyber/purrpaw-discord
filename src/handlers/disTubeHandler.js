@@ -32,7 +32,7 @@ module.exports = (client) => {
             );
 
             const row2 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('music_autoplay').setLabel('📻 Auto').setStyle(queue.autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('music_autoplay').setLabel('📻 TEST-SYNC').setStyle(queue.autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('music_queue_btn').setLabel('📋 คิว').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('music_add_modal').setLabel('➕ เพิ่มเพลง').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
