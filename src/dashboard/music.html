@@ -428,7 +428,12 @@
         socket.emit('join_guild', guildId);
 
         // --- 📡 SOCKET EVENTS ---
+        socket.on('joined', (data) => {
+            console.log('✅ Successfully joined guild room:', data.guildId);
+        });
+
         socket.on('music_status', (data) => {
+            console.log('🎵 Received music status update:', data);
             hideLoading();
             updateUI(data);
         });

@@ -60,6 +60,7 @@ const serveTestPage = async (req, res) => {
 
 app.get('/mbti', serveTestPage);
 app.get('/sbti', serveTestPage);
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/phone', (req, res) => res.sendFile(path.join(__dirname, 'phone.html')));
 app.get('/music-panel', (req, res) => res.sendFile(path.join(__dirname, 'music.html')));
 
@@ -156,8 +157,11 @@ app.post('/api/share', async (req, res) => {
 io.on('connection', (socket) => {
     // ผู้ใช้หรือบอทเข้าร่วมห้องตาม Guild ID เมี๊ยว🐾
     socket.on('join_guild', (guildId) => {
+        if (!guildId) return;
         socket.join(`guild_${guildId}`);
-        console.log(`[Socket] User joined guild room: ${guildId}`);
+        console.log(`[Socket] Client joined guild room: guild_${guildId} (ID: ${socket.id})`);
+        // ส่งสัญญาณบอกว่าเชื่อมต่อสำเร็จเมี๊ยว🐾
+        socket.emit('joined', { success: true, guildId });
     });
 
     // บอทส่งสถานะเพลงมาอัปเดตหน้าเว็บเมี๊ยว🐾

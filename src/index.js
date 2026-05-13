@@ -334,10 +334,26 @@ client.once('ready', async () => {
 // 🌐 Socket.io Client for Web Dashboard Control 🐾
 // ──────────────────────────────────────────────────────
 const DASHBOARD_URL = process.env.WEB_BASE_URL || `http://localhost:${process.env.DASHBOARD_PORT || 3000}`;
-const socket = io(DASHBOARD_URL);
+const socket = io(DASHBOARD_URL, {
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 5000
+});
 
 socket.on('connect', () => {
-    console.log('✅ Connected to Dashboard Socket Server');
+    console.log(`✅ Connected to Dashboard Socket Server at ${DASHBOARD_URL}`);
+    // เมื่อเชื่อมต่อแล้ว ให้บอทเข้าร่วมห้องของทุกเซิร์ฟเวอร์ที่บอทอยู่เมี๊ยว🐾
+    client.guilds.cache.forEach(guild => {
+        socket.emit('join_guild', guild.id);
+    });
+});
+
+socket.on('connect_error', (err) => {
+    console.error(`❌ Socket Connection Error: ${err.message}`);
+});
+
+socket.on('disconnect', (reason) => {
+    console.warn(`⚠️ Socket Disconnected: ${reason}`);
 });
 
 // ฟังก์ชั่นส่งข้อมูลเพลงไปที่หน้าเว็บเมี๊ยว🐾
