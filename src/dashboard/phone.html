@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Detective - PurrPaw Lab 🐾</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050a14;
+            --card: rgba(15, 23, 42, 0.8);
+            --primary: #00d4ff;
+            --secondary: #f472b6;
+            --gold: #c9a84c;
+            --text: #e2e8f0;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 40px 20px;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 212, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(244, 114, 182, 0.05) 0%, transparent 40%);
+        }
+
+        .container { max-width: 800px; margin: 0 auto; }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.5rem;
+            color: var(--gold);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .glass-card {
+            background: var(--card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-family: 'Space Mono', monospace;
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--primary);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            margin-bottom: 16px;
+        }
+
+        h2 {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: var(--gold);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .info-item {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .info-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--text);
+            word-break: break-all;
+        }
+
+        .ai-analysis {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(244, 114, 182, 0.1));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-result {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .ai-reason {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+        }
+
+        .ua-box {
+            font-size: 0.75rem;
+            background: #000;
+            padding: 15px;
+            border-radius: 12px;
+            color: #4ade80;
+            font-family: 'Space Mono', monospace;
+            margin-top: 10px;
+            border: 1px solid #1e293b;
+            overflow-x: auto;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 100px 0;
+            font-family: 'Space Mono', monospace;
+            color: var(--gold);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.2);
+            font-family: 'Space Mono', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">PurrPaw Lab 🐾</div>
+            <p style="color: rgba(255, 255, 255, 0.4); font-size: 0.9rem;">Device Detective Investigation</p>
+        </header>
+
+        <div id="loader" class="loading">🔍 ANALYZING DEVICE DATA...</div>
+
+        <div id="content" class="hidden" style="display:none;">
+            <!-- AI Analysis -->
+            <div class="glass-card ai-analysis">
+                <div class="status-badge">AI CONCLUSION</div>
+                <h2>🧠 PurrPaw AI Analysis</h2>
+                <div class="ai-result" id="ai-guess">Analyzing...</div>
+                <p class="ai-reason" id="ai-reason"></p>
+            </div>
+
+            <!-- Hardware Details -->
+            <div class="glass-card">
+                <h2>🛠️ Hardware Specs</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">GPU Renderer</div>
+                        <div class="info-value" id="gpu-val">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Screen Resolution</div>
+                        <div class="info-value" id="screen-val">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">RAM (Approx)</div>
+                        <div class="info-value" id="ram-val">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">CPU Cores</div>
+                        <div class="info-value" id="cpu-val">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Identification -->
+            <div class="glass-card">
+                <h2>🆔 Identification</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">IP Address</div>
+                        <div class="info-value" id="ip-val">-</div>
+                    </div>
+                    <div class="info-item" style="grid-column: span 2;">
+                        <div class="info-label">Fingerprint ID</div>
+                        <div class="info-value" id="fp-val">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Session ID</div>
+                        <div class="info-value" id="session-val">-</div>
+                    </div>
+                </div>
+                <div class="info-label" style="margin-top: 20px;">User Agent String</div>
+                <div class="ua-box" id="ua-val">-</div>
+            </div>
+
+            <!-- Raw Data Section -->
+            <div class="glass-card">
+                <h2>📦 Raw Session Data</h2>
+                <div class="info-label">Full Database Object</div>
+                <div class="ua-box" id="raw-json" style="color: #60a5fa; min-height: 100px;">Waiting for data...</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            DATABASE ACCESS SECURE — DATA ANALYTICS V2.0
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('Id');
+
+        async function fetchDeviceData() {
+            if (!sessionId) {
+                document.getElementById('loader').innerText = "❌ ERROR: NO SESSION ID PROVIDED";
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/session/${sessionId}`);
+                const data = await res.json();
+
+                if (data.error || !data.session) throw new Error("Session not found");
+
+                const s = data.session;
+                
+                // Fill Data
+                document.getElementById('ip-val').innerText = s.ip_address || "N/A";
+                document.getElementById('fp-val').innerText = s.fingerprint || "N/A";
+                document.getElementById('session-val').innerText = s.id;
+                document.getElementById('gpu-val').innerText = s.gpu_info || "N/A";
+                document.getElementById('screen-val').innerText = s.screen_res || "N/A";
+                document.getElementById('ram-val').innerText = s.ram_info || "N/A";
+                document.getElementById('cpu-val').innerText = s.cpu_cores || "N/A";
+                document.getElementById('ua-val').innerText = s.user_agent || "N/A";
+                document.getElementById('raw-json').innerText = JSON.stringify(s, null, 4);
+
+                analyzeDevice(s);
+
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+
+            } catch (err) {
+                document.getElementById('loader').innerText = "❌ ERROR: " + err.message;
+            }
+        }
+
+        function analyzeDevice(s) {
+            const gpu = (s.gpu_info || "").toLowerCase();
+            const res = (s.screen_res || "").toLowerCase();
+            const ua = (s.user_agent || "").toLowerCase();
+            
+            let guess = "Unknown Model";
+            let reason = "ข้อมูลไม่เพียงพอในการระบุรุ่นที่แน่นอนเมี๊ยว🐾";
+
+            // Logic: iPhone Mapping
+            if (ua.includes('iphone')) {
+                if (res.includes('430x932')) {
+                    guess = "iPhone 14/15 Pro Max";
+                    reason = "วิเคราะห์จากความละเอียดหน้าจอแบบ High-End (430x932) และค่าพิกเซลความหนาแน่นสูงเมี๊ยว🐾";
+                } else if (res.includes('393x852')) {
+                    guess = "iPhone 14/15 Pro / 15";
+                    reason = "หน้าจอขนาดมาตรฐานรุ่นใหม่ พร้อม Dynamic Island Resolution เมี๊ยว🐾";
+                } else if (res.includes('390x844')) {
+                    guess = "iPhone 13 / 14";
+                    reason = "ความละเอียดหน้าจอตรงกับรุ่นยอดนิยมตระกูล 13 และ 14 เมี๊ยว🐾";
+                } else if (res.includes('375x812')) {
+                    guess = "iPhone 11 Pro / XS / X";
+                    reason = "จอขนาดกะทัดรัดรุ่นคลาสสิกที่มีติ่งแบบเดิมเมี๊ยว🐾";
+                } else if (res.includes('320x568')) {
+                    guess = "iPhone SE / 5S";
+                    reason = "หน้าจอขนาดเล็กจิ๋วสไตล์คลาสสิกเมี๊ยว🐾";
+                } else if (res.includes('375x667') || res.includes('414x736')) {
+                    guess = "iPhone 8 / 7 / 6 (Plus)";
+                    reason = "ดีไซน์หน้าจอแบบมีปุ่ม Home แบบดั้งเดิมเมี๊ยว🐾";
+                } else {
+                    guess = "Apple iPhone (Generic)";
+                    reason = "ยืนยันว่าเป็น iPhone แต่ขนาดหน้าจอไม่ระบุรุ่นที่แน่นอนได้เมี๊ยว🐾";
+                }
+
+                if (gpu.includes('apple')) {
+                    reason += " + ยืนยันด้วย GPU: Apple Hardware";
+                }
+            } 
+            // Logic: Android Mapping
+            else if (ua.includes('android')) {
+                const match = ua.match(/android\s+([^\s;]+);?\s+([^;)]+)/);
+                const modelName = match ? match[2] : "Android Device";
+                guess = modelName.toUpperCase();
+                reason = `ตรวจพบชื่อรุ่นใน User Agent โดยตรง และรันบนระบบปฏิบัติการ Android เมี๊ยว🐾`;
+                
+                if (gpu.includes('adreno')) {
+                    reason += ` (ใช้ชิปเซ็ต Snapdragon: ${s.gpu_info})`;
+                } else if (gpu.includes('mali')) {
+                    reason += ` (ใช้ชิปเซ็ต Exynos/MediaTek: ${s.gpu_info})`;
+                }
+            }
+            // Logic: Desktop
+            else if (ua.includes('windows')) {
+                guess = "Windows PC / Laptop";
+                reason = "ตรวจพบระบบปฏิบัติการ Windows สำหรับคอมพิวเตอร์เมี๊ยว🐾";
+            } else if (ua.includes('macintosh')) {
+                guess = "MacBook / iMac";
+                reason = "ตรวจพบระบบปฏิบัติการ macOS สำหรับเครื่อง Mac เมี๊ยว🐾";
+            }
+
+            document.getElementById('ai-guess').innerText = guess;
+            document.getElementById('ai-reason').innerText = reason;
+        }
+
+        fetchDeviceData();
+    </script>
+</body>
+</html>

@@ -56,6 +56,7 @@ const serveTestPage = async (req, res) => {
 
 app.get('/mbti', serveTestPage);
 app.get('/sbti', serveTestPage);
+app.get('/phone', (req, res) => res.sendFile(path.join(__dirname, 'phone.html')));
 
 // ── MBTI / SBTI API ──
 app.get('/api/session/:sessionId', async (req, res) => {
@@ -78,7 +79,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
 
 app.post('/api/submit', async (req, res) => {
     try {
-        const { sessionId, scores, result, fingerprint, userAgent, deviceModel } = req.body;
+        const { sessionId, scores, result, fingerprint, userAgent, deviceModel, gpuInfo, screenRes, ramInfo, cpuCores } = req.body;
         const { data: session, error } = await supabase.from('user_mbti_sessions').select('*').eq('id', sessionId).single();
         if (error || !session) return res.status(404).json({ error: 'Session Expired เมี๊ยว🐾' });
 
@@ -99,6 +100,10 @@ app.post('/api/submit', async (req, res) => {
             fingerprint: fingerprint || null,
             user_agent: userAgent || null,
             device_model: deviceModel || null,
+            gpu_info: gpuInfo || null,
+            screen_res: screenRes || null,
+            ram_info: ramInfo || null,
+            cpu_cores: cpuCores || null,
             completed_at: new Date().toISOString()
         }).eq('id', sessionId);
 

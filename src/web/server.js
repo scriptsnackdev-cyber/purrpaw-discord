@@ -46,7 +46,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
 // API สำหรับส่งผลลัพธ์กลับไปยัง Discord เมี๊ยว🐾
 app.post('/api/submit', async (req, res) => {
     try {
-        const { sessionId, scores, result } = req.body;
+        const { sessionId, scores, result, fingerprint, userAgent, deviceModel, gpuInfo, screenRes, ramInfo, cpuCores } = req.body;
         
         // 1. ตรวจสอบ Session
         const { data: session, error } = await supabase.from('user_mbti_sessions').select('*').eq('id', sessionId).single();
@@ -65,7 +65,14 @@ app.post('/api/submit', async (req, res) => {
         await supabase.from('user_mbti_sessions').update({ 
             status: 'completed', 
             result_mbti: result,
-            ip_address: getClientIp(req), // บันทึกยืนยันอีกครั้งตอนส่งเมี๊ยว🐾
+            ip_address: getClientIp(req),
+            fingerprint: fingerprint || null,
+            user_agent: userAgent || null,
+            device_model: deviceModel || null,
+            gpu_info: gpuInfo || null,
+            screen_res: screenRes || null,
+            ram_info: ramInfo || null,
+            cpu_cores: cpuCores || null,
             completed_at: new Date().toISOString()
         }).eq('id', sessionId);
 

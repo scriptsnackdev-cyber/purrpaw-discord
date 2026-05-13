@@ -722,20 +722,47 @@
         // ── Fingerprint Init (UMD Version) ──
         const fpPromise = FingerprintJS.load();
 
+        function getGpuInfo() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (!gl) return "WebGL Not Supported";
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                return debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Unknown GPU";
+            } catch (e) { return "Error Getting GPU"; }
+        }
+
         function getDeviceInfo() {
             const ua = navigator.userAgent;
+            const screenW = window.screen.width;
+            const screenH = window.screen.height;
+            const dpr = window.devicePixelRatio;
+            
             let model = "Unknown Device";
             if (/android/i.test(ua)) {
                 const match = ua.match(/Android\s+([^\s;]+);?\s+([^;)]+)/);
                 model = match ? match[2] : "Android Device";
             } else if (/iPhone|iPad|iPod/i.test(ua)) {
-                model = "Apple Device (iPhone/iPad)";
+                // Guessing iPhone model based on screen resolution
+                if (screenW === 430 && screenH === 932) model = "iPhone 14/15 Pro Max";
+                else if (screenW === 393 && screenH === 852) model = "iPhone 14/15 Pro / 15";
+                else if (screenW === 390 && screenH === 844) model = "iPhone 13/14";
+                else if (screenW === 414 && screenH === 896) model = "iPhone XR/11/11 Pro Max";
+                else model = "iPhone/iPad";
             } else if (/Windows/i.test(ua)) {
                 model = "Windows PC";
             } else if (/Macintosh/i.test(ua)) {
                 model = "MacBook/Mac";
             }
-            return { model, ua };
+
+            return { 
+                model, 
+                ua,
+                screenRes: `${screenW}x${screenH} (DPR: ${dpr})`,
+                gpu: getGpuInfo(),
+                ram: navigator.deviceMemory ? `${navigator.deviceMemory}GB` : "Unknown",
+                cpu: navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} Cores` : "Unknown"
+            };
         }
 
         async function init() {
@@ -830,7 +857,11 @@
                         result: finalResult,
                         fingerprint: visitorId,
                         userAgent: deviceInfo.ua,
-                        deviceModel: deviceInfo.model
+                        deviceModel: deviceInfo.model,
+                        gpuInfo: deviceInfo.gpu,
+                        screenRes: deviceInfo.screenRes,
+                        ramInfo: deviceInfo.ram,
+                        cpuCores: deviceInfo.cpu
                     })
                 });
                 const data = await res.json();
