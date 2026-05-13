@@ -90,8 +90,27 @@ module.exports = (client) => {
             if (queueOrChannel?._liveInterval) clearInterval(queueOrChannel._liveInterval);
             if (queueOrChannel?.guildId && client.emitMusicUpdate) client.emitMusicUpdate(queueOrChannel.guildId);
         })
-        .on('empty', queue => {
+        .on('empty', async queue => {
             if (queue._liveInterval) clearInterval(queue._liveInterval);
+
+            if (queue._lastHandle?.msg) {
+                try {
+                    const disabledRows = queue._lastHandle.msg.components.map(row => {
+                        return new ActionRowBuilder().addComponents(
+                            row.components.map(comp => ButtonBuilder.from(comp).setDisabled(true))
+                        );
+                    });
+
+                    await editMusicMessage(
+                        queue._lastHandle,
+                        [new EmbedBuilder().setColor(0xEF4444).setDescription('❌ คิวเพลงว่างแล้วเมี๊ยว! กด /music show ใหม่เพื่อเรียกแผงควบคุมอีกครั้ง')],
+                        disabledRows
+                    );
+                } catch (e) {
+                    // ignore
+                }
+            }
+
             if (client.emitMusicUpdate) client.emitMusicUpdate(queue.id);
         });
 };

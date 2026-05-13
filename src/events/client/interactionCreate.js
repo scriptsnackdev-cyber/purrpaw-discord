@@ -153,7 +153,27 @@ module.exports = {
 
             // 🔘 2. จัดการกรณีเป็น Button (ยุบรวมทุกปุ่มไว้ที่นี่)
             else if (interaction.isButton()) {
-                const { customId, guild, member, user } = interaction;
+                const { customId, member, user } = interaction;
+            const guildId = interaction.guildId || interaction.channel?.guildId;
+            const guild = interaction.guild;
+
+            const disableStaleMusicButtons = async () => {
+                if (!interaction.message?.editable) return;
+                try {
+                    const disabledRows = interaction.message.components.map(row => {
+                        return new ActionRowBuilder().addComponents(
+                            row.components.map(comp => ButtonBuilder.from(comp).setDisabled(true))
+                        );
+                    });
+                    await interaction.update({
+                        content: '❌ ตอนนี้ไม่มีเพลงกำลังเล่นอยู่แล้วเมี๊ยว! กด `/music show` ใหม่เพื่อเรียกแผงควบคุมอีกครั้ง',
+                        embeds: [],
+                        components: disabledRows
+                    });
+                } catch (e) {
+                    // ignore
+                }
+            };
 
                 // --- ระบบ RPG Join ---
                 if (customId.startsWith('rpg_join:')) {
@@ -262,7 +282,7 @@ module.exports = {
 
                 // --- 🎵 ระบบ Music Controller Buttons ──
                 else if (customId.startsWith('music_')) {
-                    const queue = interaction.client.distube.getQueue(guild.id);
+                    const queue = guildId ? interaction.client.distube.getQueue(guildId) : null;
                     
                     // ปุ่มเพิ่มเพลง (ไม่ต้องมี Queue ก็กดได้)
                     if (customId === 'music_add_modal') {
@@ -277,7 +297,10 @@ module.exports = {
                         return await interaction.showModal(modal);
                     }
 
-                    if (!queue) return interaction.reply({ content: '❌ ตอนนี้ไม่ได้เล่นเพลงอยู่เมี๊ยว🐾', flags: [MessageFlags.Ephemeral] });
+                    if (!queue) {
+                        await disableStaleMusicButtons();
+                        return interaction.reply({ content: '❌ ตอนนี้ไม่ได้เล่นเพลงอยู่เมี๊ยว🐾', flags: [MessageFlags.Ephemeral] });
+                    }
 
                     try {
                         // ใช้ deferUpdate เพื่อความลื่นไหลของปุ่มเมี๊ยว🐾

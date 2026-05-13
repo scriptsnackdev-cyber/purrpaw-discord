@@ -69,17 +69,18 @@ module.exports.sendMusicMessage = async (channel, embeds = [], components = []) 
  * แก้ไขข้อความ Now Playing (รองรับทั้ง Webhook Message และ Normal Message)
  * @param {{ msg: Message, webhook: WebhookClient|null }} handle
  * @param {EmbedBuilder[]} embeds
+ * @param {ActionRowBuilder[]|null} components
  */
-module.exports.editMusicMessage = async ({ msg, webhook }, embeds = []) => {
+module.exports.editMusicMessage = async ({ msg, webhook }, embeds = [], components = null) => {
     if (!msg) return;
 
     try {
         if (webhook) {
             // Webhook Message ต้องใช้ webhook.editMessage()เมี๊ยว🐾
-            await webhook.editMessage(msg.id, { embeds });
+            await webhook.editMessage(msg.id, { embeds, components });
         } else {
             // ข้อความปกติใช้ msg.edit() ได้เลยเมี๊ยว🐾
-            await msg.edit({ embeds });
+            await msg.edit({ embeds, components });
         }
     } catch (err) {
         // อาจจะหมดอายุหรือถูกลบ ไม่ต้อง throw เมี๊ยว
