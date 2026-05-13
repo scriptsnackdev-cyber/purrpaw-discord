@@ -1,41 +1,13 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { sendMusicMessage, editMusicMessage } = require('../utils/musicWebhook');
+const { generateMusicPanel } = require('../utils/musicUI');
 
 module.exports = (client) => {
     client.distube
         .on('playSong', async (queue, song) => {
-            const current = queue.currentTime;
-            const total = song.duration;
-            const progress = total > 0 ? makeProgressBar(current, total) : '🔴 ถ่ายทอดสด (LIVE)';
+            const { embeds, components } = generateMusicPanel(queue);
 
-            const embed = new EmbedBuilder()
-                .setColor(0x7C3AED)
-                .setDescription(`**[${song.name}](${song.url})**`)
-                .addFields({ name: '📊 ความคืบหน้า', value: progress })
-                .setThumbnail(song.thumbnail || null)
-                .setTimestamp();
-
-            if (song.uploader?.name) embed.setAuthor({ name: `📺 ${song.uploader.name}` });
-
-            const row1 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('music_skip').setEmoji('⏭️').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('music_pause').setEmoji('⏸️').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('music_leave').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('music_loop').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('music_mute').setEmoji('🔊').setStyle(ButtonStyle.Secondary),
-            );
-
-            const row2 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('music_autoplay').setLabel('📻 Auto').setStyle(queue.autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('music_queue_btn').setLabel('📋 คิว').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('music_add_modal').setLabel('➕ เพิ่มเพลง').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                    .setLabel('🌐 เว็บควบคุม')
-                    .setURL(`${process.env.WEB_BASE_URL || 'http://localhost:3000'}/music-panel?guildId=${queue.textChannel.guildId}`)
-                    .setStyle(ButtonStyle.Link),
-            );
-
-            const handle = await sendMusicMessage(queue.textChannel, [embed], [row1, row2]);
+            const handle = await sendMusicMessage(queue.textChannel, embeds, components);
             if (client.emitMusicUpdate) client.emitMusicUpdate(queue.id);
 
             const currentMsgId = handle.msg?.id;
@@ -51,18 +23,8 @@ module.exports = (client) => {
                     const currentQueue = client.distube.getQueue(queue.textChannel.guildId);
                     if (!currentQueue || !currentQueue.songs.length || currentQueue.paused) return;
 
-                    const songNow = currentQueue.songs[0];
-                    const pb = songNow.duration > 0 ? makeProgressBar(currentQueue.currentTime, songNow.duration) : '🔴 LIVE';
-
-                    const updateEmbed = new EmbedBuilder()
-                        .setColor(0x7C3AED)
-                        .setDescription(`**[${songNow.name}](${songNow.url})**`)
-                        .setThumbnail(songNow.thumbnail || null)
-                        .addFields({ name: '📊 ความคืบหน้า', value: pb })
-                        .setTimestamp();
-                    if (songNow.uploader?.name) updateEmbed.setAuthor({ name: `📺 ${songNow.uploader.name}` });
-
-                    await editMusicMessage(handle, [updateEmbed]);
+                    const { embeds: updateEmbeds, components: updateComponents } = generateMusicPanel(currentQueue);
+                    await editMusicMessage(handle, updateEmbeds, updateComponents);
                 } catch (err) { clearInterval(queue._liveInterval); }
             }, 10000);
         })

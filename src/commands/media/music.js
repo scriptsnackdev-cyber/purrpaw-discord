@@ -142,64 +142,16 @@ module.exports = {
             await interaction.deferReply({ ephemeral: true });
 
             try {
-                // ดึง Logic จาก disTubeHandler มาใช้เพื่อสร้าง UI ใหม่เมี๊ยว🐾
-                const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
                 const { sendMusicMessage } = require('../../utils/musicWebhook');
-                const song = queue.songs[0];
-                const totalTime = song.duration;
-                const currentTime = queue.currentTime;
-                
-                // --- PROGRESS BAR: ใช้ฟังก์ชันเดียวกับใน Handler แต่ก๊อปมาไว้นี่เพื่อความง่ายเมี๊ยว🐾 ---
-                const makeProgressBar = (current, total) => {
-                    const size = 15;
-                    const percent = current / total;
-                    const progress = Math.round(size * percent);
-                    const emptyProgress = size - progress;
-                    const progressText = '▓'.repeat(progress);
-                    const emptyProgressText = '░'.repeat(emptyProgress);
-                    const fmt = (s) => {
-                        const m = Math.floor(s / 60);
-                        const sec = Math.floor(s % 60);
-                        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
-                    };
-                    return `\`${fmt(current)}\` ${progressText}${emptyProgressText} \`${fmt(total)}\``;
-                };
+                const { generateMusicPanel } = require('../../utils/musicUI');
+                const { embeds, components } = generateMusicPanel(queue);
 
-                const pb = totalTime > 0 ? makeProgressBar(currentTime, totalTime) : '🔴 ถ่ายทอดสด (LIVE)';
-
-                const embed = new EmbedBuilder()
-                    .setColor(0x7C3AED)
-                    .setDescription(`**[${song.name}](${song.url})**`)
-                    .setThumbnail(song.thumbnail || null)
-                    .addFields({ name: '📊 ความคืบหน้า', value: pb })
-                    .setTimestamp();
-
-                if (song.uploader?.name) embed.setAuthor({ name: `📺 ${song.uploader.name}` });
-
-                const row1 = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('music_skip').setEmoji('⏭️').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('music_pause').setEmoji(queue.paused ? '▶️' : '⏸️').setStyle(queue.paused ? ButtonStyle.Success : ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('music_leave').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId('music_loop').setEmoji('🔁').setStyle(queue.repeatMode > 0 ? ButtonStyle.Primary : ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('music_mute').setEmoji(queue.volume === 0 ? '🔇' : '🔊').setStyle(ButtonStyle.Secondary),
-                );
-
-                const row2 = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('music_autoplay').setLabel('📻 Auto').setStyle(queue.autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('music_queue_btn').setLabel('📋 คิว').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('music_add_modal').setLabel('➕ เพิ่มเพลง').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder()
-                        .setLabel('🌐 เว็บควบคุม')
-                        .setURL(`${process.env.WEB_BASE_URL || 'http://localhost:3000'}/music-panel?guildId=${guild.id}`)
-                        .setStyle(ButtonStyle.Link),
-                );
-
-                const handle = await sendMusicMessage(channel, [embed], [row1, row2]);
+                const handle = await sendMusicMessage(channel, embeds, components);
                 
                 // ⭐ ย้าย TIMER: อัปเดต ID เพื่อให้ Timer ทำงานต่อที่ข้อความใหม่เมี๊ยว🐾
                 queue._activeMessageId = handle.msg?.id;
                 queue._lastHandle = handle;
-                queue._lastSong = song;
+                queue._lastSong = queue.songs[0];
 
                 return interaction.editReply('✅ เรียกแผงควบคุมพรีเมียมมาให้แล้วนะเมี๊ยวว!🐾🌸');
             } catch (err) {

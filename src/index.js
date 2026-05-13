@@ -201,7 +201,8 @@ client.emitMusicUpdate = (guildId) => {
         guildId,
         current: { name: s.name, thumbnail: s.thumbnail, duration: s.duration, uploader: s.uploader?.name || 'Unknown', url: s.url },
         queue: q.songs.map(x => ({ name: x.name, thumbnail: x.thumbnail, duration: x.duration, member: x.member?.displayName || 'ทาสแมว' })),
-        paused: q.paused, volume: q.volume, currentTime: q.currentTime
+        paused: q.paused, volume: q.volume, currentTime: q.currentTime,
+        autoplay: q.autoplay // เพิ่มสถานะ Autoplay เมี๊ยว🐾
     });
 };
 
@@ -223,6 +224,7 @@ socket.on('bot_command', async (data) => {
             case 'previous': await q.previous().catch(() => { }); break;
             case 'volume': q.setVolume(value); break;
             case 'seek': q.seek(value); break;
+            case 'autoplay': q.toggleAutoplay(); break; // เพิ่มคำสั่งเปิด/ปิด Autoplay เมี๊ยว🐾
             case 'play':
                 const g = client.guilds.cache.get(guildId);
                 const vc = g.members.me.voice.channel || g.channels.cache.find(c => c.type === 2);

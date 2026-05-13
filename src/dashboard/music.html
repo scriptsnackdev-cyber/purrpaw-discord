@@ -49,9 +49,10 @@
                 <div class="time-labels"><span id="cur">0:00</span><span id="tot">0:00</span></div>
             </div>
             <div class="control-group">
-                <button class="btn-icon" onclick="cmd('previous')">⏮️</button>
-                <button class="btn-icon btn-main" id="play-btn" onclick="cmd('toggle')">⏸️</button>
-                <button class="btn-icon" onclick="cmd('skip')">⏭️</button>
+                <button class="btn-icon" onclick="cmd('previous')" title="เพลงก่อนหน้า">⏮️</button>
+                <button class="btn-icon btn-main" id="play-btn" onclick="cmd('toggle')" title="เล่น/หยุด">⏸️</button>
+                <button class="btn-icon" onclick="cmd('skip')" title="ข้ามเพลง">⏭️</button>
+                <button class="btn-icon" id="auto-btn" onclick="cmd('autoplay')" title="เล่นเพลงอัตโนมัติ">📻</button>
             </div>
             <div class="vol-box">🔊 <input type="range" class="vol-slider" min="0" max="100" oninput="cmd('volume', this.value)"></div>
         </div>
@@ -79,6 +80,16 @@
             document.getElementById('tot').innerText = fmt(data.current.duration);
             document.getElementById('fill').style.width = (data.currentTime/data.current.duration*100)+'%';
             document.getElementById('play-btn').innerText = data.paused ? '▶️' : '⏸️';
+            
+            // อัปเดตสถานะปุ่ม Auto เมี๊ยว🐾
+            const autoBtn = document.getElementById('auto-btn');
+            if (data.autoplay) {
+                autoBtn.style.background = 'var(--p)';
+                autoBtn.style.borderColor = 'var(--p)';
+            } else {
+                autoBtn.style.background = 'rgba(255,255,255,0.05)';
+                autoBtn.style.borderColor = 'rgba(255,255,255,0.1)';
+            }
             document.getElementById('queue-list').innerHTML = data.queue.slice(1).map(s => `
                 <div class="q-item">
                     <img src="${s.thumbnail}" class="q-img" onerror="this.src='https://i.imgur.com/8Q8pP8X.png'">

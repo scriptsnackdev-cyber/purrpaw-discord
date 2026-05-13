@@ -23,15 +23,17 @@ module.exports = {
             }
         }
 
-        // 🛡️ ระบบ Anti-Spam เบื้องต้น (ป้องกันคนกดปุ่มรัวๆ เมี๊ยว🐾)
-        if (!interaction.client.interactionCooldowns) interaction.client.interactionCooldowns = new Map();
-        const cooldownKey = `${interaction.user.id}-${interaction.customId || interaction.commandName}`;
-        const lastUsed = interaction.client.interactionCooldowns.get(cooldownKey) || 0;
-        const now = Date.now();
-        if (now - lastUsed < 800) { // 0.8 วินาทีเมี๊ยว🐾
-            return interaction.reply({ content: '🐾 ใจเย็นๆ นะเมี๊ยววว อย่ารัวปุ่มสิ!', flags: [MessageFlags.Ephemeral] }).catch(() => { });
+        // 🛡️ ระบบ Anti-Spam สำหรับ Command เท่านั้น (ลด timeout จาก 800ms → 300ms สำหรับ button ให้ได้ response ไว)
+        if (interaction.isChatInputCommand()) {
+            if (!interaction.client.interactionCooldowns) interaction.client.interactionCooldowns = new Map();
+            const cooldownKey = `${interaction.user.id}-${interaction.commandName}`;
+            const lastUsed = interaction.client.interactionCooldowns.get(cooldownKey) || 0;
+            const now = Date.now();
+            if (now - lastUsed < 300) { // 0.3 วินาทีเพื่อลดการบล็อก interaction ที่ตัวต่างกัน
+                return interaction.reply({ content: '🐾 ใจเย็นๆ นะเมี๊ยววว!', flags: [MessageFlags.Ephemeral] }).catch(() => { });
+            }
+            interaction.client.interactionCooldowns.set(cooldownKey, now);
         }
-        interaction.client.interactionCooldowns.set(cooldownKey, now);
 
         try {
             // --- 1. ดึงข้อมูลฟีเจอร์และเซ็ตติ้งจาก Cache ---
@@ -127,6 +129,26 @@ module.exports = {
                         content: `✅ ย้าย **${pickedSong.name}** มาเป็นคิวถัดไปแล้วเมี๊ยวว!🐾🌸`,
                         embeds: [],
                         components: []
+                    });
+                }
+                // --- จัดการ Select Menu ของห้องส่วนตัว (Invite/Kick) ---
+                else if (interaction.customId === 'private_room_invite_select' || interaction.customId === 'private_room_kick_select') {
+                    const isInvite = interaction.customId === 'private_room_invite_select';
+                    const selectedUsers = interaction.values;
+
+                    if (!interaction.client.privateRoomConfirm) interaction.client.privateRoomConfirm = new Map();
+                    interaction.client.privateRoomConfirm.set(interaction.message.id, selectedUsers);
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`private_room_confirm:${isInvite ? 'invite' : 'kick'}`)
+                            .setLabel(`ยืนยัน${isInvite ? 'ชวนเพื่อน' : 'เตะเพื่อน'}`)
+                            .setStyle(isInvite ? ButtonStyle.Success : ButtonStyle.Danger)
+                    );
+
+                    await interaction.update({
+                        content: `💡 คุณเลือกเพื่อน ${selectedUsers.length} คน: ${selectedUsers.map(id => `<@${id}>`).join(', ')}\n**กดปุ่มเพื่อยืนยันเมี๊ยว!🐾**`,
+                        components: [row]
                     });
                 }
                 // --- จัดการ Select Menu ของห้องเสียง ---
@@ -225,31 +247,36 @@ module.exports = {
                 // --- ปุ่มรับยศปกติ (Toggle) ---
                 else if (customId.startsWith('assign_role:')) {
                     if (features.role_button === false) return interaction.reply({ content: '❌ ระบบปิดใช้งานอยู่เมี๊ยว', flags: [MessageFlags.Ephemeral] });
-                    const roleId = customId.split(':')[1];
-                    const role = guild.roles.cache.get(roleId);
-
-                    if (!role) return interaction.reply({ content: 'หา Role ไม่เจอเมี๊ยว! (ยศอาจจะถูกลบไปแล้ว🐾)', flags: [MessageFlags.Ephemeral] });
-
+                    
+                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                    
                     try {
+                        const roleId = customId.split(':')[1];
+                        const role = guild.roles.cache.get(roleId);
+
+                        if (!role) {
+                            return await interaction.editReply({ content: 'หา Role ไม่เจอเมี๊ยว! (ยศอาจจะถูกลบไปแล้ว🐾)' });
+                        }
+
                         // เช็คสิทธิ์บอทเบื้องต้นเมี๊ยว
                         if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-                            return interaction.reply({ content: '❌ บอทไม่มีสิทธิ์ `Manage Roles` ในเซิร์ฟเวอร์นี้เมี๊ยว! กรุณาตรวจสอบการตั้งค่าของบอทนะ🐾', flags: [MessageFlags.Ephemeral] });
+                            return await interaction.editReply({ content: '❌ บอทไม่มีสิทธิ์ `Manage Roles` ในเซิร์ฟเวอร์นี้เมี๊ยว! กรุณาตรวจสอบการตั้งค่าของบอทนะ🐾' });
                         }
 
                         if (role.position >= guild.members.me.roles.highest.position) {
-                            return interaction.reply({ content: `❌ ยศ **${role.name}** อยู่สูงกว่าหรือเท่ากับยศของบอทเมี๊ยว! บอทเลยจัดการไม่ได้ (ต้องย้ายยศบอทให้สูงขึ้นใน Server Settings นะ🐾)`, flags: [MessageFlags.Ephemeral] });
+                            return await interaction.editReply({ content: `❌ ยศ **${role.name}** อยู่สูงกว่าหรือเท่ากับยศของบอทเมี๊ยว! บอทเลยจัดการไม่ได้ (ต้องย้ายยศบอทให้สูงขึ้นใน Server Settings นะ🐾)` });
                         }
 
                         if (member.roles.cache.has(role.id)) {
                             await member.roles.remove(role);
-                            return interaction.reply({ content: `ดึงยศ **${role.name}** ออกให้แล้วนะเมี๊ยว🐾`, flags: [MessageFlags.Ephemeral] });
+                            return await interaction.editReply({ content: `ดึงยศ **${role.name}** ออกให้แล้วนะเมี๊ยว🐾` });
                         } else {
                             await member.roles.add(role);
-                            return interaction.reply({ content: `เพิ่มยศ **${role.name}** ให้แล้วนะเมี๊ยวว!🐾`, flags: [MessageFlags.Ephemeral] });
+                            return await interaction.editReply({ content: `เพิ่มยศ **${role.name}** ให้แล้วนะเมี๊ยวว!🐾` });
                         }
                     } catch (e) {
                         console.error('Role Assign Error:', e);
-                        return interaction.reply({ content: `งื้อออ บอทจัดการยศไม่ได้เมี๊ยว: \`${e.message}\` 🐾`, flags: [MessageFlags.Ephemeral] });
+                        return await interaction.editReply({ content: `งื้อออ บอทจัดการยศไม่ได้เมี๊ยว: \`${e.message}\` 🐾` });
                     }
                 }
 
@@ -259,24 +286,34 @@ module.exports = {
                     const addRole = guild.roles.cache.get(addRoleId);
                     const removeRole = removeRoleId ? guild.roles.cache.get(removeRoleId) : null;
 
+                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
                     try {
                         // เช็คสิทธิ์บอทเบื้องต้น
                         if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
-                            return interaction.reply({ content: '❌ บอทไม่มีสิทธิ์จัดการยศเมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+                            return await interaction.editReply({ content: '❌ บอทไม่มีสิทธิ์จัดการยศเมี๊ยว!' });
                         }
 
                         if (addRole && addRole.position >= guild.members.me.roles.highest.position) {
-                            return interaction.reply({ content: `❌ ยศ **${addRole.name}** สูงเกินความสามารถของบอทเmi๊ยว🐾`, flags: [MessageFlags.Ephemeral] });
+                            return await interaction.editReply({ content: `❌ ยศ **${addRole.name}** สูงเกินความสามารถของบอทเmi๊ยว🐾` });
                         }
 
                         if (addRole) await member.roles.add(addRole);
                         if (removeRole && member.roles.cache.has(removeRole.id)) {
                             await member.roles.remove(removeRole);
                         }
-                        return interaction.reply({ content: `✨ **ยืนยันตัวตนสำเร็จ!** ยินดีต้อนรับเข้าบ้านอย่างเป็นทางการนะเมี๊ยววว! 🐾`, flags: [MessageFlags.Ephemeral] });
+                        return await interaction.editReply({ content: `✨ **ยืนยันตัวตนสำเร็จ!** ยินดีต้อนรับเข้าบ้านอย่างเป็นทางการนะเมี๊ยววว! 🐾` });
                     } catch (e) {
                         console.error('Verify button error:', e);
-                        return interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการจัดการยศเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
+                        try {
+                            if (!interaction.replied && !interaction.deferred) {
+                                await interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการจัดการยศเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
+                            } else if (interaction.deferred) {
+                                await interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการจัดการยศเมี๊ยว...' });
+                            }
+                        } catch (err) {
+                            // silent
+                        }
                     }
                 }
 
@@ -298,13 +335,17 @@ module.exports = {
                     }
 
                     if (!queue) {
+                        // ถ้า queue หมดแล้ว ให้ยาวรับรู้ว่า interaction ยังใช้ได้ (แม้จะ fail)
+                        await interaction.deferUpdate().catch(() => {});
                         await disableStaleMusicButtons();
-                        return interaction.reply({ content: '❌ ตอนนี้ไม่ได้เล่นเพลงอยู่เมี๊ยว🐾', flags: [MessageFlags.Ephemeral] });
+                        return;
                     }
 
                     try {
                         // ใช้ deferUpdate เพื่อความลื่นไหลของปุ่มเมี๊ยว🐾
-                        if (customId !== 'music_queue_btn') await interaction.deferUpdate().catch(() => {});
+                        if (customId !== 'music_queue_btn') {
+                            await interaction.deferUpdate();
+                        }
 
                         switch (customId) {
                             case 'music_skip':
@@ -324,7 +365,14 @@ module.exports = {
                                 queue.setVolume(queue.volume === 0 ? 50 : 0);
                                 break;
                             case 'music_autoplay':
-                                queue.toggleAutoplay();
+                                try {
+                                    const newAutoplayState = queue.toggleAutoplay();
+                                    const statusText = newAutoplayState ? '✅ เปิดใช้ Autoplay แล้ว' : '❌ ปิด Autoplay แล้ว';
+                                    await interaction.followUp({ content: statusText, flags: [MessageFlags.Ephemeral] });
+                                } catch (e) {
+                                    console.error('Autoplay Toggle Error:', e);
+                                    await interaction.followUp({ content: '❌ ไม่สามารถเปลี่ยน Autoplay ได้เมี๊ยว', flags: [MessageFlags.Ephemeral] });
+                                }
                                 break;
                             case 'music_queue_btn':
                                 const qMsg = queue.songs.slice(0, 10).map((s, i) => `${i === 0 ? '▶️' : `${i}.`} **${s.name}**`).join('\n');
@@ -332,12 +380,27 @@ module.exports = {
                                 break;
                         }
                         
+                        // อัปเดตแผงใน Discord ทันทีเมี๊ยว🐾
+                        if (queue._lastHandle) {
+                            const { generateMusicPanel } = require('../../utils/musicUI');
+                            const { editMusicMessage } = require('../../utils/musicWebhook');
+                            const { embeds, components } = generateMusicPanel(queue);
+                            await editMusicMessage(queue._lastHandle, embeds, components);
+                        }
+
                         // อัปเดตหน้าเว็บเมี๊ยว🐾
                         if (interaction.client.emitMusicUpdate) interaction.client.emitMusicUpdate(guild.id);
                         
                     } catch (err) {
-                        console.error('Button Error:', err);
-                        await interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการกดปุ่มเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
+                        console.error('Music Button Error:', err);
+                        try {
+                            // ลองตอบกลับ หรือ update หรือเงียบเสียง
+                            if (!interaction.replied) {
+                                await interaction.reply({ content: '❌ เกิดข้อผิดพลาดในการกดปุ่มเมี๊ยว...', flags: [MessageFlags.Ephemeral] });
+                            }
+                        } catch (e) {
+                            // interaction ใช้ไม่ได้แล้ว เงียบเสียง
+                        }
                     }
                 }
 
