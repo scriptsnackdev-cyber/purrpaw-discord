@@ -103,6 +103,8 @@ const ytdlpPlugin = {
     }
 };
 
+const { YouTubePlugin } = require('@distube/youtube');
+
 // ── Discord Client Setup ──
 const client = new Client({
     intents: [
@@ -127,7 +129,10 @@ const ffmpegPath = ffmpegPaths.find(p => fs.existsSync(p)) || 'ffmpeg';
 client.distube = new DisTube(client, {
     ffmpeg: { path: ffmpegPath },
     emitNewSongOnly: true,
-    plugins: [ytdlpPlugin],
+    plugins: [
+        new YouTubePlugin(), // เพิ่มตัวนี้เพื่อให้หาเพลง Related (Autoplay) ได้เมี๊ยว🐾
+        ytdlpPlugin
+    ],
 });
 
 client.commands = new Collection();

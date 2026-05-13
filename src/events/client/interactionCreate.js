@@ -381,12 +381,13 @@ module.exports = {
                         }
                         
                         // อัปเดตแผงใน Discord ทันทีเมี๊ยว🐾
-                        if (queue._lastHandle) {
-                            const { generateMusicPanel } = require('../../utils/musicUI');
-                            const { editMusicMessage } = require('../../utils/musicWebhook');
-                            const { embeds, components } = generateMusicPanel(queue);
-                            await editMusicMessage(queue._lastHandle, embeds, components);
-                        }
+                        const { generateMusicPanel } = require('../../utils/musicUI');
+                        const { editMusicMessage } = require('../../utils/musicWebhook');
+                        const { embeds, components } = generateMusicPanel(queue);
+                        
+                        // ใช้ handle จาก _lastHandle หรือ interaction.message (fallback) เมี๊ยว🐾
+                        const handle = queue._lastHandle || { msg: interaction.message, webhook: null };
+                        await editMusicMessage(handle, embeds, components);
 
                         // อัปเดตหน้าเว็บเมี๊ยว🐾
                         if (interaction.client.emitMusicUpdate) interaction.client.emitMusicUpdate(guild.id);
