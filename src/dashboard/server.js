@@ -26,6 +26,11 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Helper: ดึง IP Address ของผู้ใช้เมี๊ยว🐾 ──
+const getClientIp = (req) => {
+    return req.headers['x-forwarded-for']?.split(',')[0] || req.ip || req.socket.remoteAddress;
+};
+
 // ── MBTI / SBTI Routes ──
 const serveTestPage = async (req, res) => {
     const { sessionId } = req.query;
@@ -56,6 +61,13 @@ app.get('/sbti', serveTestPage);
 app.get('/api/session/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
+        const ip = getClientIp(req);
+
+        // บันทึก IP ลง Session เพื่อติดตามการใช้งานเมี๊ยว🐾
+        await supabase.from('user_mbti_sessions')
+            .update({ ip_address: ip })
+            .eq('id', sessionId);
+
         const { data: session, error } = await supabase.from('user_mbti_sessions').select('*').eq('id', sessionId).single();
         if (error || !session) return res.status(404).json({ error: 'ไม่พบเซสชันเมี๊ยว🐾' });
 
@@ -83,6 +95,7 @@ app.post('/api/submit', async (req, res) => {
         await supabase.from('user_mbti_sessions').update({ 
             status: 'completed', 
             result_mbti: result,
+            ip_address: getClientIp(req), // บันทึกยืนยันอีกครั้งตอนส่งเมี๊ยว🐾
             completed_at: new Date().toISOString()
         }).eq('id', sessionId);
 
