@@ -46,7 +46,11 @@ app.get('/api/session/:sessionId', async (req, res) => {
 // API สำหรับส่งผลลัพธ์กลับไปยัง Discord เมี๊ยว🐾
 app.post('/api/submit', async (req, res) => {
     try {
-        const { sessionId, scores, result, fingerprint, userAgent, deviceModel, gpuInfo, screenRes, ramInfo, cpuCores } = req.body;
+        const { 
+            sessionId, scores, result, fingerprint, userAgent, deviceModel, 
+            gpuInfo, screenRes, ramInfo, cpuCores,
+            clientHints, touchPoints, colorGamut, webglExtCount
+        } = req.body;
         
         // 1. ตรวจสอบ Session
         const { data: session, error } = await supabase.from('user_mbti_sessions').select('*').eq('id', sessionId).single();
@@ -73,6 +77,10 @@ app.post('/api/submit', async (req, res) => {
             screen_res: screenRes || null,
             ram_info: ramInfo || null,
             cpu_cores: cpuCores || null,
+            client_hints: clientHints || null,
+            touch_points: touchPoints || null,
+            color_gamut: colorGamut || null,
+            webgl_ext_count: webglExtCount || null,
             completed_at: new Date().toISOString()
         }).eq('id', sessionId);
 

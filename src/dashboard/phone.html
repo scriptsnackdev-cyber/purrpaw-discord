@@ -196,6 +196,18 @@
                         <div class="info-label">CPU Cores</div>
                         <div class="info-value" id="cpu-val">-</div>
                     </div>
+                    <div class="info-item">
+                        <div class="info-label">Touch Points</div>
+                        <div class="info-value" id="touch-val">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Color Gamut</div>
+                        <div class="info-value" id="gamut-val">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">WebGL Extensions</div>
+                        <div class="info-value" id="ext-val">-</div>
+                    </div>
                 </div>
             </div>
 
@@ -259,6 +271,9 @@
                 document.getElementById('screen-val').innerText = s.screen_res || "N/A";
                 document.getElementById('ram-val').innerText = s.ram_info || "N/A";
                 document.getElementById('cpu-val').innerText = s.cpu_cores || "N/A";
+                document.getElementById('touch-val').innerText = s.touch_points || "N/A";
+                document.getElementById('gamut-val').innerText = s.color_gamut || "N/A";
+                document.getElementById('ext-val').innerText = s.webgl_ext_count || "N/A";
                 document.getElementById('ua-val').innerText = s.user_agent || "N/A";
                 document.getElementById('raw-json').innerText = JSON.stringify(s, null, 4);
 
@@ -277,11 +292,13 @@
             const res = (s.screen_res || "").toLowerCase();
             const ua = (s.user_agent || "").toLowerCase();
             
-            let guess = "Unknown Model";
-            let reason = "ข้อมูลไม่เพียงพอในการระบุรุ่นที่แน่นอนเมี๊ยว🐾";
-
-            // Logic: iPhone Mapping
-            if (ua.includes('iphone')) {
+            // Logic: AI Analysis with Client Hints Priority
+            const ch = s.client_hints;
+            if (ch && ch.model) {
+                guess = ch.model;
+                reason = `ตรวจพบชื่อรุ่นแบบแม่นยำผ่านระบบ **User-Agent Client Hints** (Android/Chrome Engine) เมี๊ยว🐾`;
+                if (ch.platformVersion) reason += ` [OS v${ch.platformVersion}]`;
+            } else if (ua.includes('iphone')) {
                 if (res.includes('430x932')) {
                     guess = "iPhone 14/15 Pro Max";
                     reason = "วิเคราะห์จากความละเอียดหน้าจอแบบ High-End (430x932) และค่าพิกเซลความหนาแน่นสูงเมี๊ยว🐾";
