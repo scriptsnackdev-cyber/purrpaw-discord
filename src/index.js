@@ -286,7 +286,7 @@ const { cleanupExpiredBans } = require('./utils/banManager');
 
 const { REST, Routes } = require('discord.js');
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`✅ บอทออนไลน์แล้วเมี๊ยว: ${client.user.tag}`);
 
 
@@ -343,19 +343,20 @@ const socket = io(DASHBOARD_URL, {
 // ฟังก์ชั่นส่งข้อมูลเพลงไปที่หน้าเว็บเมี๊ยว🐾
 client.emitMusicUpdate = function(guildId) {
     const queue = client.distube.getQueue(guildId);
-    if (!queue) {
+    if (!queue || !queue.songs || queue.songs.length === 0) {
         socket.emit('music_update', { guildId, current: null, queue: [], paused: false, volume: 50, currentTime: 0 });
         return;
     }
 
+    const song = queue.songs[0];
     const data = {
         guildId,
         current: {
-            name: queue.songs[0].name,
-            thumbnail: queue.songs[0].thumbnail,
-            duration: queue.songs[0].duration,
-            uploader: queue.songs[0].uploader?.name || 'Unknown',
-            url: queue.songs[0].url
+            name: song.name,
+            thumbnail: song.thumbnail,
+            duration: song.duration,
+            uploader: song.uploader?.name || 'Unknown',
+            url: song.url
         },
         queue: queue.songs.map(s => ({
             name: s.name,
