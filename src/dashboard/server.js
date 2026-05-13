@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
+const { Server } = require('socket.io');
 const { Client, GatewayIntentBits } = require('discord.js');
 const supabase = require('../supabaseClient');
 const { sendTestResult, MBTI_DATA, MBTI_IMAGES, SBTI_DATA, SBTI_IMAGES } = require('../utils/mbtiShared');
@@ -20,6 +21,9 @@ client.login(process.env.DISCORD_TOKEN).catch(err => {
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
 const PORT = process.env.DASHBOARD_PORT || 3000;
 
 app.use(cors());
@@ -57,6 +61,7 @@ const serveTestPage = async (req, res) => {
 app.get('/mbti', serveTestPage);
 app.get('/sbti', serveTestPage);
 app.get('/phone', (req, res) => res.sendFile(path.join(__dirname, 'phone.html')));
+app.get('/music-panel', (req, res) => res.sendFile(path.join(__dirname, 'music.html')));
 
 // ── MBTI / SBTI API ──
 app.get('/api/session/:sessionId', async (req, res) => {
@@ -147,4 +152,28 @@ app.post('/api/share', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-server.listen(PORT, () => console.log(`🚀 Standalone MBTI Web is running at: http://localhost:${PORT}`));
+// ── Socket.io Logic ──
+io.on('connection', (socket) => {
+    // ผู้ใช้หรือบอทเข้าร่วมห้องตาม Guild ID เมี๊ยว🐾
+    socket.on('join_guild', (guildId) => {
+        socket.join(`guild_${guildId}`);
+        console.log(`[Socket] User joined guild room: ${guildId}`);
+    });
+
+    // บอทส่งสถานะเพลงมาอัปเดตหน้าเว็บเมี๊ยว🐾
+    socket.on('music_update', (data) => {
+        if (data.guildId) {
+            io.to(`guild_${data.guildId}`).emit('music_status', data);
+        }
+    });
+
+    // หน้าเว็บส่งคำสั่งควบคุมมาหาบอทเมี๊ยว🐾
+    socket.on('music_command', (data) => {
+        if (data.guildId) {
+            // ส่งคำสั่งไปให้บอทในห้องเดียวกันเมี๊ยว🐾
+            io.to(`guild_${data.guildId}`).emit('bot_command', data);
+        }
+    });
+});
+
+server.listen(PORT, () => console.log(`🚀 Standalone MBTI & Music Web is running at: http://localhost:${PORT}`));

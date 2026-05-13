@@ -188,6 +188,10 @@ module.exports = {
                     new ButtonBuilder().setCustomId('music_autoplay').setLabel('📻 Auto').setStyle(queue.autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
                     new ButtonBuilder().setCustomId('music_queue_btn').setLabel('📋 คิว').setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder().setCustomId('music_add_modal').setLabel('➕ เพิ่มเพลง').setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setLabel('🌐 เว็บควบคุม')
+                        .setURL(`${process.env.WEB_BASE_URL || 'http://localhost:3000'}/music-panel?guildId=${guild.id}`)
+                        .setStyle(ButtonStyle.Link),
                 );
 
                 const handle = await sendMusicMessage(channel, [embed], [row1, row2]);
