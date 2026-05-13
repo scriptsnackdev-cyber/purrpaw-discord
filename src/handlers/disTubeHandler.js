@@ -43,6 +43,9 @@ module.exports = (client) => {
 
             // ส่งข้อความผ่าน musicWebhook (Persona ถ้าตั้งไว้ หรือ Default)🐾
             const handle = await sendMusicMessage(queue.textChannel, [embed], [row1, row2]);
+            
+            // อัปเดตหน้าเว็บเมี๊ยว🐾
+            if (client.emitMusicUpdate) client.emitMusicUpdate(queue.id);
 
             // เก็บ ID ข้อความที่ "ทำงานอยู่" ในปัจจุบันไว้เมี๊ยว🐾
             const currentMsgId = handle.msg?.id;
@@ -112,6 +115,7 @@ module.exports = (client) => {
                 .setThumbnail(song.thumbnail || null);
 
             queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
+            if (client.emitMusicUpdate) client.emitMusicUpdate(queue.id);
         })
 
         // ── เพิ่ม Playlist ──
@@ -128,6 +132,7 @@ module.exports = (client) => {
                 .setThumbnail(playlist.thumbnail || null);
 
             queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
+            if (client.emitMusicUpdate) client.emitMusicUpdate(queue.id);
         })
 
         // ── จบเพลงแต่ละเพลง ──
@@ -173,6 +178,11 @@ module.exports = (client) => {
                     .setTimestamp();
                 textChannel.send({ embeds: [embed] }).catch(() => {});
             }
+
+            // อัปเดตหน้าเว็บเมี๊ยว🐾
+            if (queueOrChannel?.guildId && client.emitMusicUpdate) {
+                client.emitMusicUpdate(queueOrChannel.guildId);
+            }
         })
 
         // ── ห้องเสียงว่าง ──
@@ -182,6 +192,7 @@ module.exports = (client) => {
                 .setColor(0xF59E0B)
                 .setDescription('💨 ห้องเงียบเหงาเกินไปแล้วเมี๊ยว... บอทขอกลับบ้านก่อนนะ🐾');
             queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
+            if (client.emitMusicUpdate) client.emitMusicUpdate(queue.id);
         })
 
         // ── เล่นเพลงจบหมดคิว ──

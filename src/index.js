@@ -340,24 +340,8 @@ const socket = io(DASHBOARD_URL, {
     reconnectionDelay: 5000
 });
 
-socket.on('connect', () => {
-    console.log(`✅ Connected to Dashboard Socket Server at ${DASHBOARD_URL}`);
-    // เมื่อเชื่อมต่อแล้ว ให้บอทเข้าร่วมห้องของทุกเซิร์ฟเวอร์ที่บอทอยู่เมี๊ยว🐾
-    client.guilds.cache.forEach(guild => {
-        socket.emit('join_guild', guild.id);
-    });
-});
-
-socket.on('connect_error', (err) => {
-    console.error(`❌ Socket Connection Error: ${err.message}`);
-});
-
-socket.on('disconnect', (reason) => {
-    console.warn(`⚠️ Socket Disconnected: ${reason}`);
-});
-
 // ฟังก์ชั่นส่งข้อมูลเพลงไปที่หน้าเว็บเมี๊ยว🐾
-function emitMusicUpdate(guildId) {
+client.emitMusicUpdate = function(guildId) {
     const queue = client.distube.getQueue(guildId);
     if (!queue) {
         socket.emit('music_update', { guildId, current: null, queue: [], paused: false, volume: 50, currentTime: 0 });
@@ -370,7 +354,7 @@ function emitMusicUpdate(guildId) {
             name: queue.songs[0].name,
             thumbnail: queue.songs[0].thumbnail,
             duration: queue.songs[0].duration,
-            uploader: queue.songs[0].uploader.name,
+            uploader: queue.songs[0].uploader?.name || 'Unknown',
             url: queue.songs[0].url
         },
         queue: queue.songs.map(s => ({
@@ -384,7 +368,18 @@ function emitMusicUpdate(guildId) {
         currentTime: queue.currentTime
     };
     socket.emit('music_update', data);
-}
+};
+
+socket.on('connect', () => {
+    console.log(`✅ Connected to Dashboard Socket Server at ${DASHBOARD_URL}`);
+    client.guilds.cache.forEach(guild => {
+        socket.emit('join_guild', guild.id);
+    });
+});
+
+socket.on('connect_error', (err) => {
+    console.error(`❌ Socket Connection Error: ${err.message}`);
+});
 
 // รับคำสั่งจากหน้าเว็บเมี๊ยว🐾
 socket.on('bot_command', async (data) => {
@@ -393,7 +388,7 @@ socket.on('bot_command', async (data) => {
 
     try {
         if (action === 'request_update') {
-            emitMusicUpdate(guildId);
+            client.emitMusicUpdate(guildId);
             return;
         }
 
@@ -414,7 +409,6 @@ socket.on('bot_command', async (data) => {
                 queue.setVolume(value);
                 break;
             case 'play':
-                // ค้นหาห้องเสียงของบอทหรือ Admin ที่สั่งเมี๊ยว🐾
                 const guild = client.guilds.cache.get(guildId);
                 const voiceChannel = guild.members.me.voice.channel || guild.channels.cache.find(c => c.type === 2);
                 if (voiceChannel) {
@@ -422,29 +416,18 @@ socket.on('bot_command', async (data) => {
                 }
                 break;
         }
-        // ส่งอัปเดตกลับไปทันทีหลังทำคำสั่งเมี๊ยว🐾
-        emitMusicUpdate(guildId);
+        client.emitMusicUpdate(guildId);
     } catch (err) {
         console.error('[SocketCommand] Error:', err.message);
     }
 });
 
-// เชื่อม DisTube Events เข้ากับ Socket เมี๊ยว🐾
-client.distube
-    .on('playSong', (queue) => emitMusicUpdate(queue.id))
-    .on('addSong', (queue) => emitMusicUpdate(queue.id))
-    .on('finishSong', (queue) => emitMusicUpdate(queue.id))
-    .on('disconnect', (queue) => emitMusicUpdate(queue.id))
-    .on('error', (channel, e) => {
-        if (channel.guildId) emitMusicUpdate(channel.guildId);
-    });
-
-// อัปเดตเวลาเพลงทุกๆ 3 วินาทีถ้ากำลังเล่นอยู่เมี๊ยว🐾
+// อัปเดตเวลาเพลงทุกๆ 3 วินาทีเมี๊ยว🐾
 setInterval(() => {
     client.guilds.cache.forEach(guild => {
         const queue = client.distube.getQueue(guild.id);
         if (queue && !queue.paused) {
-            emitMusicUpdate(guild.id);
+            client.emitMusicUpdate(guild.id);
         }
     });
 }, 3000);
