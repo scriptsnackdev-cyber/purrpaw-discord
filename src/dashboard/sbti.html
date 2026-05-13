@@ -8,6 +8,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Sarabun:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap"
         rel="stylesheet">
+    <script src="https://openfpcdn.io/fingerprintjs/v4"></script>
     <style>
         :root {
             --crimson: #e11d48;
@@ -857,6 +858,26 @@
         let currentIdx = 0;
         let sbtiScores = {};
         let sessionData = null;
+        let visitorId = null;
+
+        // ── Fingerprint Init ──
+        const fpPromise = FingerprintJS.load();
+
+        function getDeviceInfo() {
+            const ua = navigator.userAgent;
+            let model = "Unknown Device";
+            if (/android/i.test(ua)) {
+                const match = ua.match(/Android\s+([^\s;]+);?\s+([^;)]+)/);
+                model = match ? match[2] : "Android Device";
+            } else if (/iPhone|iPad|iPod/i.test(ua)) {
+                model = "Apple Device (iPhone/iPad)";
+            } else if (/Windows/i.test(ua)) {
+                model = "Windows PC";
+            } else if (/Macintosh/i.test(ua)) {
+                model = "MacBook/Mac";
+            }
+            return { model, ua };
+        }
 
         async function init() {
             if (!sessionId) {
@@ -941,10 +962,23 @@
             }
 
             try {
+                // Get fingerprint before submitting
+                const fp = await fpPromise;
+                const fpResult = await fp.get();
+                visitorId = fpResult.visitorId;
+                const deviceInfo = getDeviceInfo();
+
                 const res = await fetch('/api/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId, scores: sbtiScores, result: finalResult })
+                    body: JSON.stringify({ 
+                        sessionId, 
+                        scores: sbtiScores, 
+                        result: finalResult,
+                        fingerprint: visitorId,
+                        userAgent: deviceInfo.ua,
+                        deviceModel: deviceInfo.model
+                    })
                 });
                 const data = await res.json();
 

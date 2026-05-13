@@ -78,7 +78,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
 
 app.post('/api/submit', async (req, res) => {
     try {
-        const { sessionId, scores, result } = req.body;
+        const { sessionId, scores, result, fingerprint, userAgent, deviceModel } = req.body;
         const { data: session, error } = await supabase.from('user_mbti_sessions').select('*').eq('id', sessionId).single();
         if (error || !session) return res.status(404).json({ error: 'Session Expired เมี๊ยว🐾' });
 
@@ -95,7 +95,10 @@ app.post('/api/submit', async (req, res) => {
         await supabase.from('user_mbti_sessions').update({ 
             status: 'completed', 
             result_mbti: result,
-            ip_address: getClientIp(req), // บันทึกยืนยันอีกครั้งตอนส่งเมี๊ยว🐾
+            ip_address: getClientIp(req),
+            fingerprint: fingerprint || null,
+            user_agent: userAgent || null,
+            device_model: deviceModel || null,
             completed_at: new Date().toISOString()
         }).eq('id', sessionId);
 
