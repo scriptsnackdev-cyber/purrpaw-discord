@@ -25,9 +25,9 @@ module.exports = {
         }
 
         // ── 📝 ระบบบันทึกการแนะนำตัวและวันเกิดอัตโนมัติ (Auto Intro & Birthday Tracking) ──
-        const introChannelId = settings.intro_channel_id;
-        const botIntroChannelId = settings.bot_intro_channel_id;
-        const birthdayChannelId = settings.birthday_channel_id;
+        const introChannelId = settings.intro_channel_id || settings.ai_chat?.intro_channel_id || '1482445140810399928';
+        const botIntroChannelId = settings.bot_intro_channel_id || settings.ai_chat?.bot_intro_channel_id || '1486316042824188025';
+        const birthdayChannelId = settings.birthday_channel_id || settings.ai_chat?.birthday_channel_id || '1503011148545396897';
 
         const isIntro = message.channel.id === introChannelId;
         const isBotIntro = message.channel.id === botIntroChannelId;
@@ -46,60 +46,57 @@ module.exports = {
                 if (isBotIntro) updateData.message_bot_introduction = content;
                 if (isBirthday) updateData.message_birthday = content;
 
-                // ถ้าเป็นห้องวันเกิด ให้แกะข้อมูลเพิ่มเมี๊ยว🐾
-                if (isBirthday) {
-                    const birthDateMatch = content.match(/วัน\/เดือน\/ปี\s*เกิด\s*[:：]\s*([^\n]+)/i);
-                    const favCharsMatch = content.match(/ตัวละครที่ชอบ\s*[:：]\s*([^\n]+)/i);
+                // 🔍 พยายามแกะข้อมูลเพิ่มเติมจากข้อความ (วันเกิด, ตัวละครที่ชอบ) เมี๊ยว🐾
+                const birthDateMatch = content.match(/วัน\/เดือน\/ปี\s*เกิด\s*[:：]\s*([^\n]+)/i);
+                const favCharsMatch = content.match(/ตัวละครที่ชอบ\s*[:：]\s*([^\n]+)/i);
 
-                    if (birthDateMatch) {
-                        let rawDate = birthDateMatch[1].trim();
-                        const monthMap = {
-                            'มกราคม': '01', 'ม.ค.': '01', 'january': '01', 'jan': '01',
-                            'กุมภาพันธ์': '02', 'ก.พ.': '02', 'february': '02', 'feb': '02',
-                            'มีนาคม': '03', 'ม.ค.': '03', 'march': '03', 'mar': '03',
-                            'เมษายน': '04', 'เม.ย.': '04', 'april': '04', 'apr': '04',
-                            'พฤษภาคม': '05', 'พ.ค.': '05', 'may': '05',
-                            'มิถุนายน': '06', 'มิ.ย.': '06', 'june': '06', 'jun': '06',
-                            'กรกฎาคม': '07', 'ก.ค.': '07', 'july': '07', 'jul': '07',
-                            'สิงหาคม': '08', 'ส.ค.': '08', 'august': '08', 'aug': '08',
-                            'กันยายน': '09', 'ก.ย.': '09', 'september': '09', 'sep': '09',
-                            'ตุลาคม': '10', 'ต.ค.': '10', 'october': '10', 'oct': '10',
-                            'พฤศจิกายน': '11', 'พ.ย.': '11', 'november': '11', 'nov': '11',
-                            'ธันวาคม': '12', 'ธ.ค.': '12', 'december': '12', 'dec': '12'
-                        };
+                if (birthDateMatch) {
+                    let rawDate = birthDateMatch[1].trim();
+                    const monthMap = {
+                        'มกราคม': '01', 'ม.ค.': '01', 'january': '01', 'jan': '01',
+                        'กุมภาพันธ์': '02', 'ก.พ.': '02', 'february': '02', 'feb': '02',
+                        'มีนาคม': '03', 'มี.ค.': '03', 'march': '03', 'mar': '03',
+                        'เมษายน': '04', 'เม.ย.': '04', 'april': '04', 'apr': '04',
+                        'พฤษภาคม': '05', 'พ.ค.': '05', 'may': '05',
+                        'มิถุนายน': '06', 'มิ.ย.': '06', 'june': '06', 'jun': '06',
+                        'กรกฎาคม': '07', 'ก.ค.': '07', 'july': '07', 'jul': '07',
+                        'สิงหาคม': '08', 'ส.ค.': '08', 'august': '08', 'aug': '08',
+                        'กันยายน': '09', 'ก.ย.': '09', 'september': '09', 'sep': '09',
+                        'ตุลาคม': '10', 'ต.ค.': '10', 'october': '10', 'oct': '10',
+                        'พฤศจิกายน': '11', 'พ.ย.': '11', 'november': '11', 'nov': '11',
+                        'ธันวาคม': '12', 'ธ.ค.': '12', 'december': '12', 'dec': '12'
+                    };
 
-                        const dateParts = rawDate.split(/[\s\/\-]+/).filter(p => p.length > 0);
-                        if (dateParts.length === 3) {
-                            let day = dateParts[0].padStart(2, '0');
-                            let monthPart = dateParts[1].toLowerCase();
-                            let month = monthMap[monthPart] || monthMap[monthPart + '.'] || monthPart.padStart(2, '0');
-                            let year = parseInt(dateParts[2]);
+                    const dateParts = rawDate.split(/[\s\/\-]+/).filter(p => p.length > 0);
+                    if (dateParts.length === 3) {
+                        let day = dateParts[0].padStart(2, '0');
+                        let monthPart = dateParts[1].toLowerCase();
+                        let month = monthMap[monthPart] || monthMap[monthPart + '.'] || (isNaN(monthPart) ? '01' : monthPart.padStart(2, '0'));
+                        let year = parseInt(dateParts[2]);
 
-                            if (!isNaN(year)) {
-                                if (year > 2400) {
-                                    year = year - 543;
-                                } else if (year < 100) {
-                                    if (year <= 26) {
-                                        year = 2000 + year;
-                                    } else if (year <= 70) {
-                                        year = (2500 + year) - 543;
-                                    } else {
-                                        year = 1900 + year;
-                                    }
-                                }
-                                updateData.birth_date = `${day}/${month}/${year}`;
-                            } else {
-                                updateData.birth_date = rawDate;
+                        if (!isNaN(year)) {
+                            if (year > 2400) year -= 543;
+                            else if (year < 100) {
+                                if (year <= 26) year = 2000 + year;
+                                else if (year <= 70) year = (2500 + year) - 543;
+                                else year = 1900 + year;
                             }
+                            updateData.birth_date = `${day}/${month}/${year}`;
                         } else {
                             updateData.birth_date = rawDate;
                         }
+                    } else {
+                        updateData.birth_date = rawDate;
                     }
-                    if (favCharsMatch) updateData.favorite_characters = favCharsMatch[1].trim();
                 }
+                if (favCharsMatch) updateData.favorite_characters = favCharsMatch[1].trim();
 
                 const { error: upsertError } = await supabase.from('user_introductions').upsert(updateData, { onConflict: 'guild_id, user_id' });
-                if (upsertError) console.error('Auto Intro/Birthday Track Error:', upsertError);
+                if (upsertError) {
+                    console.error('Auto Intro/Birthday Track Error:', upsertError);
+                } else {
+                    console.log(`[Auto Track] Successfully updated profile for ${message.author.username} in ${message.guild.name}`);
+                }
             })();
         }
 

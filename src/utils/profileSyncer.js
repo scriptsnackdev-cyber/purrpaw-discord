@@ -1,39 +1,44 @@
-const { Events } = require('discord.js');
-const { getGuildData } = require('../../utils/guildCache');
-const supabase = require('../../supabaseClient');
+const supabase = require('../supabaseClient');
+const { getGuildData } = require('./guildCache');
 
-module.exports = {
-    name: Events.MessageUpdate,
-    async execute(oldMessage, newMessage) {
-        // 1. กรองข้อความที่ไม่ต้องการ (บอท, ไม่มีกิลด์, ข้อความไม่เปลี่ยนแปลง)
-        if (newMessage.author?.bot || !newMessage.guild || oldMessage.content === newMessage.content) return;
-
-        // 2. ดึงข้อมูล Settings จาก Cache
-        const { settings } = await getGuildData(newMessage.guild.id);
+/**
+ * ฟังก์ชันสำหรับ Sync ข้อมูลการแนะนำตัวและวันเกิดจากห้องต่างๆ ในกิลด์
+ * @param {import('discord.js').Guild} guild 
+ */
+async function syncGuildProfiles(guild) {
+    try {
+        const { settings } = await getGuildData(guild.id);
 
         const introChannelId = settings.intro_channel_id || settings.ai_chat?.intro_channel_id || '1482445140810399928';
         const botIntroChannelId = settings.bot_intro_channel_id || settings.ai_chat?.bot_intro_channel_id || '1486316042824188025';
         const birthdayChannelId = settings.birthday_channel_id || settings.ai_chat?.birthday_channel_id || '1503011148545396897';
 
-        const isIntro = newMessage.channel.id === introChannelId;
-        const isBotIntro = newMessage.channel.id === botIntroChannelId;
-        const isBirthday = newMessage.channel.id === birthdayChannelId;
+        const channels = [
+            { id: introChannelId, column: 'message_introduction', name: 'Intro เซิฟ' },
+            { id: botIntroChannelId, column: 'message_bot_introduction', name: 'Intro บอท' },
+            { id: birthdayChannelId, column: 'message_birthday', name: 'วันเกิด', parseInfo: true }
+        ];
 
-        // 3. ถ้ามีการแก้ไขข้อความในห้องที่กำหนด ให้ทำการอัปเดตใน Supabase
-        if ((isIntro || isBotIntro || isBirthday) && newMessage.content.length > 5) {
-            try {
-                const content = newMessage.content;
+        let totalSynced = 0;
+
+        for (const chInfo of channels) {
+            const channel = await guild.channels.fetch(chInfo.id).catch(() => null);
+            if (!channel || !channel.isTextBased()) continue;
+
+            const messages = await channel.messages.fetch({ limit: 100 }).catch(() => []);
+            
+            for (const msg of messages.values()) {
+                if (msg.author.bot || msg.content.length < 5) continue;
+
+                const content = msg.content;
                 const updateData = {
-                    guild_id: newMessage.guild.id,
-                    user_id: newMessage.author.id,
-                    message: content // ส่งลงคอลัมน์เก่าด้วยเมี๊ยว🐾
+                    guild_id: guild.id,
+                    user_id: msg.author.id,
+                    message: content,
+                    [chInfo.column]: content
                 };
 
-                if (isIntro) updateData.message_introduction = content;
-                if (isBotIntro) updateData.message_bot_introduction = content;
-                if (isBirthday) updateData.message_birthday = content;
-
-                // 🔍 พยายามแกะข้อมูลเพิ่มเติมจากข้อความ (วันเกิด, ตัวละครที่ชอบ) เมี๊ยว🐾
+                // 🔍 พยายามแกะข้อมูลเพิ่มเติมจากข้อความ (วันเกิด, ตัวละครที่ชอบ)
                 const birthDateMatch = content.match(/วัน\/เดือน\/ปี\s*เกิด\s*[:：]\s*([^\n]+)/i);
                 const favCharsMatch = content.match(/ตัวละครที่ชอบ\s*[:：]\s*([^\n]+)/i);
 
@@ -78,15 +83,30 @@ module.exports = {
                 }
                 if (favCharsMatch) updateData.favorite_characters = favCharsMatch[1].trim();
 
-                const { error: upsertError } = await supabase.from('user_introductions').upsert(updateData, { onConflict: 'guild_id, user_id' });
-                if (upsertError) {
-                    console.error('Auto Track Error (messageUpdate):', upsertError);
-                } else {
-                    console.log(`[Auto Track] Updated profile for ${newMessage.author.username} in ${newMessage.guild.name}`);
-                }
-            } catch (err) {
-                console.error('[Auto Track Error] messageUpdate:', err);
+                const { error } = await supabase.from('user_introductions').upsert(updateData, { onConflict: 'guild_id, user_id' });
+                if (!error) totalSynced++;
             }
         }
+        console.log(`[ProfileSyncer] Synced ${totalSynced} profiles for guild ${guild.name} (${guild.id})`);
+        return totalSynced;
+    } catch (err) {
+        console.error(`[ProfileSyncer] Error syncing guild ${guild.id}:`, err);
+        return 0;
     }
-};
+}
+
+/**
+ * Sync ข้อมูลทุกกิลด์ที่บอทอยู่
+ * @param {import('discord.js').Client} client 
+ */
+async function syncAllGuildProfiles(client) {
+    console.log('[ProfileSyncer] Starting global sync for all guilds...');
+    const guilds = client.guilds.cache;
+    let total = 0;
+    for (const guild of guilds.values()) {
+        total += await syncGuildProfiles(guild);
+    }
+    console.log(`[ProfileSyncer] Global sync completed. Total synced: ${total}`);
+}
+
+module.exports = { syncGuildProfiles, syncAllGuildProfiles };

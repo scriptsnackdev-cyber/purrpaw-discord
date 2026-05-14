@@ -108,7 +108,10 @@ const ytdlpPlugin = {
         try {
             // ค้นหาเพลงที่คล้ายกับเพลงปัจจุบันเมี๊ยว🐾
             const results = await this.distube.search(song.name, { limit: 5 });
-            return results.filter(s => s.id !== song.id);
+            return results.map(s => {
+                s.plugin = ytdlpPlugin; // บังคับให้ใช้ Plugin ตัวนี้ในการเล่นต่อเมี๊ยว🐾
+                return s;
+            }).filter(s => s.id !== song.id);
         } catch (e) {
             return [];
         }
@@ -178,9 +181,13 @@ if (fs.existsSync(handlersPath)) {
 const { cleanupExpiredSessions } = require('./utils/aiCleanup');
 const { cleanupPrivateRooms, warnPrivateRooms } = require('./utils/privateRoomCleanup');
 const { cleanupExpiredBans } = require('./utils/banManager');
+const { syncAllGuildProfiles } = require('./utils/profileSyncer');
 
 client.once('clientReady', async () => {
     console.log(`✅ บอทออนไลน์แล้วเมี๊ยว: ${client.user.tag}`);
+    
+    // 🚀 Sync ข้อมูลโปรไฟล์จากห้องต่างๆ เมื่อเริ่มต้นระบบเมี๊ยว🐾
+    syncAllGuildProfiles(client).catch(err => console.error('[ProfileSyncer] Startup error:', err));
     try {
         const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         const commandsJSON = Array.from(client.commands.values()).map(c => c.data.toJSON());
