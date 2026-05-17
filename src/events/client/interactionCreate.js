@@ -1311,6 +1311,14 @@ module.exports = {
                     // ส่งเข้าห้องใหม่
                     const newMsg = await targetChannel.send({ embeds: [newEmbed], components: [row] });
 
+                    // อัปเดตข้อความ message ID ใหม่ลงใน DB ด้วยเมี๊ยว🐾
+                    await supabase
+                        .from('tickets')
+                        .update({
+                            admin_message_id: newMsg.id
+                        })
+                        .eq('id', ticketId);
+
                     // ลบข้อความเก่า
                     await interaction.message.delete().catch(() => { });
 
@@ -1474,6 +1482,7 @@ module.exports = {
                         .insert({
                             guild_id: guild.id,
                             user_id: user.id,
+                            user_tag: user.tag,
                             title,
                             message,
                             image_url: imageUrl || null,
@@ -1510,7 +1519,16 @@ module.exports = {
                             new ButtonBuilder().setCustomId(`ticket_status:${ticket.id}:Reject`).setLabel('ปฏิเสธ').setStyle(ButtonStyle.Danger).setEmoji('❌')
                         );
 
-                        await pendingChannel.send({ embeds: [embed], components: [row] });
+                        const sentMsg = await pendingChannel.send({ embeds: [embed], components: [row] });
+
+                        // อัปเดตข้อมูล message ID ใน DB ด้วยเมี๊ยว🐾
+                        await supabase
+                            .from('tickets')
+                            .update({
+                                admin_channel_id: pendingId,
+                                admin_message_id: sentMsg.id
+                            })
+                            .eq('id', ticket.id);
                     }
 
                     return interaction.editReply({ content: '✅ ส่งข้อมูลแจ้งเรื่องเรียบร้อยแล้วเมี๊ยวว!🐾 ขอบคุณที่แจ้งเข้ามานะเมี๊ยวว' });
