@@ -1489,7 +1489,9 @@ module.exports = {
                             pending_channel_id: pendingId,
                             reject_channel_id: rejectId,
                             approve_channel_id: approveId,
-                            status: 'Pending'
+                            status: 'Pending',
+                            admin_channel_id: pendingId,
+                            admin_message_id: 'pending'
                         })
                         .select()
                         .single();
