@@ -76,7 +76,11 @@ module.exports = {
                 .addStringOption(o => o.setName('image_url').setDescription('ลิงก์รูปภาพประกอบ Embed')))
         .addSubcommand(sub =>
             sub.setName('private-end')
-                .setDescription('🚫 สั่งปิดห้อง Private AI Chat ทั้งหมดในเซิร์ฟเวอร์ทันที (Admin Only)')),
+                .setDescription('🚫 สั่งปิดห้อง Private AI Chat ทั้งหมดในเซิร์ฟเวอร์ทันที (Admin Only)'))
+        .addSubcommand(sub =>
+            sub.setName('clone')
+                .setDescription('👥 กวาดแชทคนในดิสมาสร้างเป็นตัวปลอม (Persona)')
+                .addUserOption(o => o.setName('user').setDescription('เลือกคนที่ต้องการจะก๊อปปี้').setRequired(true))),
 
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
@@ -324,6 +328,138 @@ module.exports = {
             const deletedCount = await closeAllSessions(interaction.guild);
 
             return interaction.editReply({ content: `✅ ปิดห้อง Private AI Chat ทั้งหมดเรียบร้อย! (ลบไปทั้งหมด **${deletedCount}** ห้อง🐾)` });
+        }
+
+        // 11. CLONE: Copy user's persona from chat history
+        if (sub === 'clone') {
+            const targetUser = interaction.options.getUser('user');
+            const aiProvider = require('../../utils/aiProvider');
+
+            // 1. Fetch last 1000 messages from the channel (10 batches of 100)
+            let allMessages = [];
+            let lastId = null;
+
+            for (let i = 0; i < 10; i++) {
+                const options = { limit: 100 };
+                if (lastId) options.before = lastId;
+
+                const messages = await interaction.channel.messages.fetch(options);
+                if (messages.size === 0) break;
+                
+                allMessages.push(...messages.values());
+                lastId = messages.last().id;
+                if (messages.size < 100) break;
+            }
+
+            // Sort all messages by time (oldest first)
+            allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+            // 2. Fetch User Introduction Names for better context
+            const userIdsInChat = new Set(allMessages.map(m => m.author.id));
+            const { data: dbNames } = await supabase
+                .from('user_introductions')
+                .select('user_id, message_introduction, message_bot_introduction')
+                .eq('guild_id', interaction.guild.id)
+                .in('user_id', Array.from(userIdsInChat));
+
+            const nameMap = new Map();
+            dbNames?.forEach(row => {
+                const content = row.message_bot_introduction || row.message_introduction || "";
+                const nameMatch = content.match(/ชื่อ\s*[:：]\s*([^\n]+)/);
+                if (nameMatch) {
+                    nameMap.set(row.user_id, nameMatch[1].trim());
+                }
+            });
+
+            // 3. Extract target user messages with context (2 messages before)
+            let userContextData = [];
+            for (let i = 0; i < allMessages.length; i++) {
+                const msg = allMessages[i];
+                if (msg.author.id === targetUser.id && msg.content.trim().length > 0) {
+                    const context = [];
+                    // Get 2 messages before
+                    if (i >= 2) context.push(allMessages[i - 2]);
+                    if (i >= 1) context.push(allMessages[i - 1]);
+
+                    const formattedContext = context.map(m => {
+                        const name = nameMap.get(m.author.id) || m.author.username;
+                        return `[${name}]: ${m.content}`;
+                    }).join('\n');
+
+                    userContextData.push({
+                        context: formattedContext,
+                        message: msg.content
+                    });
+
+                    if (userContextData.length >= 100) break;
+                }
+            }
+
+            if (userContextData.length === 0) {
+                return interaction.editReply({ content: `❌ ไม่พบข้อความของ ${targetUser} ใน 1000 ข้อความล่าสุดของห้องนี้เลยเมี๊ยว...` });
+            }
+
+            const targetName = nameMap.get(targetUser.id) || targetUser.username;
+            const chatLog = userContextData.map(d => 
+                `--- Conversation ---\nContext:\n${d.context}\nTarget User [${targetName}]: ${d.message}`
+            ).join('\n\n');
+
+            const systemPrompt = `คุณคือผู้เชี่ยวชาญด้านการถอดรหัสบุคลิกภาพและการจำลองตัวตนระดับปรมาจารย์ (Master of Identity Simulation) 🐾
+หน้าที่ของคุณคือ:
+1. วิเคราะห์ "บันทึกการคุยพร้อมบริบท" (Chat Log with Context) เพื่อถอดรหัสตัวตนของเป้าหมายอย่างละเอียดที่สุด
+2. สรุปออกมาเป็น "Persona" ที่ลึกและสมจริงที่สุด โดยครอบคลุมหัวข้อดังนี้:
+   - **วิเคราะห์สไตล์การพูด:** (โทนเสียง, คำศัพท์ที่ใช้, การเว้นวรรค, การพิมพ์ผิด, หรือการใช้อิโมจิ)
+   - **บุคลิกและทัศนคติ:** (พื้นฐานนิสัยเป็นคนยังไง? ร่าเริง, ขี้แซะ, ปากแข็ง, หรือขี้อ้อน?)
+   - **แผนผังความสัมพันธ์ (Relationship Map):** (วิเคราะห์ว่าเขาปฏิบัติกับคนแต่ละคนในกลุ่มยังไง ใครคือเพื่อนสนิท ใครคือคนที่เขาเกรงใจ ใครคือคนที่เขาชอบแกล้ง)
+   - **Real Dialogue Examples (Verbatim Quotes):** เลือกบทสนทนาจริงจาก "Chat Log" ที่ส่งไปให้ (ห้ามแก้ไขคำพูดแม้แต่คำเดียว!) มาโชว์เป็นตัวอย่างอย่างน้อย 5 ชุด ในรูปแบบ [ชื่อคนถาม]: "คำถาม" -> [เป้าหมาย]: "คำตอบจริง"
+3. Persona ที่สรุปต้องมีความยาวไม่เกิน 2,000 ตัวอักษร (ร่ายมาให้ละเอียดที่สุด!)
+4. ตอบกลับเฉพาะเนื้อหา Persona เท่านั้น ห้ามมีคำนำหรือคำลงท้ายอื่นๆ`;
+
+            try {
+                // 2. Generate Persona using AI
+                const persona = await globalAIQueue.run(() => aiProvider.getChatAI([
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: `บันทึกการคุยของ ${targetUser.username}:\n${chatLog}` }
+                ]));
+
+                if (!persona) throw new Error("AI returned empty persona");
+
+                // 3. Get Server-specific Avatar and Name
+                const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+                const imageUrl = member 
+                    ? member.displayAvatarURL({ extension: 'png', size: 512 }) 
+                    : targetUser.displayAvatarURL({ extension: 'png', size: 512 });
+                
+                const name = member ? member.displayName : targetUser.displayName;
+
+                // 4. Create AI Character in DB
+                const { data, error } = await supabase.from('ai_characters').insert({
+                    guild_id: guildId,
+                    name: name,
+                    persona: persona,
+                    image_url: imageUrl,
+                    is_public: false
+                }).select().single();
+
+                if (error) {
+                    console.error('Error creating cloned AI:', error);
+                    return interaction.editReply({ content: '❌ สร้างตัวละคร AI (ตัวปลอม) ไม่สำเร็จเมี๊ยว' });
+                }
+
+                globalCharsCacheTime = 0; // Invalidate cache
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`👥 ก๊อปปี้เรียบร้อย! ตัวปลอมของ ${name} มาแล้ว!`)
+                    .setDescription(`**Persona ที่วิเคราะห์ได้:**\n${persona}`)
+                    .setThumbnail(imageUrl)
+                    .setColor(0x8B5CF6)
+                    .setFooter({ text: `สร้างสำเร็จโดยใช้แชทล่าสุด ${userContextData.length} ข้อความ` });
+
+                return interaction.editReply({ embeds: [embed] });
+            } catch (err) {
+                console.error('Clone Error:', err);
+                return interaction.editReply({ content: '❌ เกิดข้อผิดพลาดในการวิเคราะห์ Persona เมี๊ยว...' });
+            }
         }
     },
 

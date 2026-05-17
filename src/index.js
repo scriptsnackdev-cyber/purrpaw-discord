@@ -269,3 +269,12 @@ setInterval(() => {
 
 
 client.login(process.env.DISCORD_TOKEN);
+
+// 🛡️ ป้องกันบอทดับจากการ Error ที่ไม่ได้คาดคิดเมี๊ยว🐾
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ [Unhandled Rejection]:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('❌ [Uncaught Exception]:', err);
+});

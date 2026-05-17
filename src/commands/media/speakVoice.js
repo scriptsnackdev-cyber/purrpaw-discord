@@ -104,35 +104,40 @@ module.exports = {
             });
 
             collector.on('collect', async i => {
-                if (i.customId.startsWith('cancel_voice')) {
-                    await i.update({ content: '🚫 ยกเลิกการส่งแล้วเมี๊ยว!', embeds: [], files: [], components: [] });
-                    return collector.stop();
-                }
-
-                if (i.customId.startsWith('confirm_voice')) {
-                    await i.update({ content: '⏳ กำลังส่งข้อความเสียงเมี๊ยว...', embeds: [], files: [], components: [] });
-                    
-                    try {
-                        // ── ส่งผ่าน Webhook ──
-                        const webhooks = await channel.fetchWebhooks();
-                        let webhook = webhooks.find(wh => wh.name === 'PurrPaw Speak');
-                        if (!webhook) {
-                            webhook = await channel.createWebhook({ name: 'PurrPaw Speak', avatar: client.user.displayAvatarURL() });
-                        }
-
-                        await webhook.send({
-                            content: text,
-                            username: char.name,
-                            avatarURL: char.image_url,
-                            files: [attachment]
-                        });
-
-                        await i.editReply({ content: '✅ ส่งข้อความเสียงสำเร็จแล้วเมี๊ยวว! ✨', components: [] });
-                    } catch (error) {
-                        console.error('Confirm Voice Error:', error);
-                        await i.editReply({ content: `❌ เกิดข้อผิดพลาดในการส่ง: ${error.message}`, components: [] });
+                try {
+                    if (i.customId.startsWith('cancel_voice')) {
+                        await i.update({ content: '🚫 ยกเลิกการส่งแล้วเมี๊ยว!', embeds: [], files: [], components: [] });
+                        return collector.stop();
                     }
-                    collector.stop();
+
+                    if (i.customId.startsWith('confirm_voice')) {
+                        await i.update({ content: '⏳ กำลังส่งข้อความเสียงเมี๊ยว...', embeds: [], files: [], components: [] });
+                        
+                        try {
+                            // ── ส่งผ่าน Webhook ──
+                            const webhooks = await channel.fetchWebhooks();
+                            let webhook = webhooks.find(wh => wh.name === 'PurrPaw Speak');
+                            if (!webhook) {
+                                webhook = await channel.createWebhook({ name: 'PurrPaw Speak', avatar: client.user.displayAvatarURL() });
+                            }
+
+                            await webhook.send({
+                                content: text,
+                                username: char.name,
+                                avatarURL: char.image_url,
+                                files: [attachment]
+                            });
+
+                            await i.editReply({ content: '✅ ส่งข้อความเสียงสำเร็จแล้วเมี๊ยวว! ✨', components: [] });
+                        } catch (error) {
+                            console.error('Confirm Voice Error:', error);
+                            await i.editReply({ content: `❌ เกิดข้อผิดพลาดในการส่ง: ${error.message}`, components: [] });
+                        }
+                        collector.stop();
+                    }
+                } catch (error) {
+                    if (error.code === 10062) return; // Silent on Unknown Interaction
+                    console.error('[SpeakVoice Collector Error]:', error);
                 }
             });
 

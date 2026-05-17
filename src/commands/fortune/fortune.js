@@ -288,7 +288,10 @@ async function drawCard(interaction) {
         .setColor(0x8B5CF6);
 
     // Initial reply (loading state)
-    await interaction.reply({ embeds: [loadingEmbed], withResponse: true });
+    if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply().catch(() => { });
+    }
+    await interaction.editReply({ embeds: [loadingEmbed] });
 
     // สร้าง Promise สำหรับ Delay 5 วินาที
     const delay = ms => new Promise(res => setTimeout(res, ms));

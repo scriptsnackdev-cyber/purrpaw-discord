@@ -131,34 +131,38 @@ async function startTest(interaction) {
     });
 
     collector.on('collect', async (i) => {
-        const parts = i.customId.split(':');
-        const qIdx = Number(parts[1]);
-        const optIdx = Number(parts[2]);
-        const q = QUESTIONS[qIdx];
-        const opt = q.options[optIdx];
+        try {
+            // 🛑 Acknowledge interaction ทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
+            await i.deferUpdate();
 
-        // เพิ่มคะแนนให้ Types ที่เกี่ยวข้อง
-        opt.types.forEach(type => {
-            scores[type] = (scores[type] || 0) + 1;
-        });
-        
-        currentIdx++;
+            const parts = i.customId.split(':');
+            const qIdx = Number(parts[1]);
+            const optIdx = Number(parts[2]);
+            const q = QUESTIONS[qIdx];
+            const opt = q.options[optIdx];
 
-        if (currentIdx < QUESTIONS.length) {
-            await i.update({
-                embeds: [getEmbed(currentIdx)],
-                components: getRows(currentIdx)
+            // เพิ่มคะแนนให้ Types ที่เกี่ยวข้อง
+            opt.types.forEach(type => {
+                scores[type] = (scores[type] || 0) + 1;
             });
-        } else {
-            // คำนวณผลลัพธ์: เลือก Type ที่ได้คะแนนสูงสุด
-            const sortedTypes = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-            const sbtiResult = sortedTypes.length > 0 ? sortedTypes[0][0] : "OG8K";
+            
+            currentIdx++;
 
-            await i.update({
-                content: `🐾 **ประมวลผลเสร็จแล้วเมี๊ยว!** กำลังสรุปตัวตนของคุณ... ✨`,
-                embeds: [],
-                components: []
-            });
+            if (currentIdx < QUESTIONS.length) {
+                await i.editReply({
+                    embeds: [getEmbed(currentIdx)],
+                    components: getRows(currentIdx)
+                });
+            } else {
+                // คำนวณผลลัพธ์: เลือก Type ที่ได้คะแนนสูงสุด
+                const sortedTypes = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+                const sbtiResult = sortedTypes.length > 0 ? sortedTypes[0][0] : "OG8K";
+
+                await i.editReply({
+                    content: `🐾 **ประมวลผลเสร็จแล้วเมี๊ยว!** กำลังสรุปตัวตนของคุณ... ✨`,
+                    embeds: [],
+                    components: []
+                });
 
             // 📝 บันทึกผลลงฐานข้อมูล
             await supabase.from('user_profiles').upsert({
@@ -201,7 +205,11 @@ async function startTest(interaction) {
 
             collector.stop();
         }
-    });
+    } catch (error) {
+        if (error.code === 10062) return; // Silent on Unknown Interaction
+        console.error('[SBTI Collector Error]:', error);
+    }
+});
 
     collector.on('end', (collected, reason) => {
         if (reason === 'time') {

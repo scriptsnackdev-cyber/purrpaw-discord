@@ -111,7 +111,7 @@ module.exports = {
                 room = roomCache.data;
             } else {
                 const { data } = await supabase.from('private_rooms')
-                    .select('id')
+                    .select('id, owner_id')
                     .eq('channel_id', message.channel.id)
                     .eq('is_deleted', false)
                     .single();
@@ -136,18 +136,45 @@ module.exports = {
                         message.client.privateRoomLogTimer = null;
 
                         for (const [rId, logs] of logsToFlush) {
-                            supabase.rpc('append_private_room_log', { room_id: rId, new_log: logs }).then(({ error }) => {
-                                if (error) {
-                                    supabase.from('private_rooms').select('chat_logs').eq('id', rId).single().then(({ data }) => {
+                            (async () => {
+                                try {
+                                    const { error } = await supabase.rpc('append_private_room_log', { room_id: rId, new_log: logs });
+                                    if (error) {
+                                        const { data } = await supabase.from('private_rooms').select('chat_logs').eq('id', rId).single();
                                         if (data) {
                                             const updatedLogs = (data.chat_logs || '') + logs;
-                                            supabase.from('private_rooms').update({ chat_logs: updatedLogs }).eq('id', rId).catch(() => { });
+                                            await supabase.from('private_rooms').update({ chat_logs: updatedLogs }).eq('id', rId);
                                         }
-                                    });
+                                    }
+                                } catch (err) {
+                                    // Silent catch for logging errors
                                 }
-                            }).catch(() => { });
+                            })();
                         }
                     }, 5000);
+                }
+            }
+
+            // ── 🏷️ ระบบ Tag เพื่อชวนเข้าห้องอัตโนมัติ (Tag to Invite) ──
+            if (room && room.owner_id === message.author.id && message.mentions.users.size > 0) {
+                const mentionedUsers = message.mentions.users.filter(u => u.id !== message.author.id && !u.bot);
+                if (mentionedUsers.size > 0) {
+                    let invitedCount = 0;
+                    for (const [userId, user] of mentionedUsers) {
+                        try {
+                            await message.channel.permissionOverwrites.edit(userId, {
+                                ViewChannel: true,
+                                SendMessages: true,
+                                ReadMessageHistory: true
+                            });
+                            invitedCount++;
+                        } catch (err) {
+                            console.error('Tag invite error:', err);
+                        }
+                    }
+                    if (invitedCount > 0) {
+                        await message.react('✅').catch(() => {});
+                    }
                 }
             }
         }

@@ -194,6 +194,47 @@ async function generateImageAI(prompt, referenceImageUrl = null) {
     return null; // Gemini OpenAI endpoint doesn't support image generation directly here
 }
 
+async function getRelationSummaryAI(chatBlock, targetName = null) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.SUMMARY_MODEL || process.env.GEMINI_SUMMARY_MODEL || 'gemini-1.5-flash';
+
+    let focusInstruction = targetName 
+        ? `วิเคราะห์ความสัมพันธ์ระหว่าง "${targetName}" กับผู้คนในแชทนี้ "ทุกคน" ที่มีการปฏิสัมพันธ์กัน (Interact) 🐾
+           กรุณาสรุปแยกเป็นรายบุคคลให้ครบถ้วนทุกคนที่ปรากฏในแชทและมีการคุยกับ ${targetName} หรือถูก ${targetName} พูดถึง
+           โดยระบุ:
+           - ชื่อผู้ที่ปฏิสัมพันธ์
+           - ลักษณะความสัมพันธ์ (สนิทกัน, แกล้งกัน, จีบกัน, ไม่ถูกกัน ฯลฯ)
+           - บรรยากาศการคุยที่เกิดขึ้น
+           (สรุปให้สนุกสนาน น่าติดตาม และครบทุกคนที่มีการ Interact กันจริงๆ เมี๊ยว!)`
+        : `วิเคราะห์ความสัมพันธ์ภาพรวมระหว่างผู้คนในแชท (ใครสนิทกับใคร ใครชอบแกล้งใคร ใครเป็นหัวโจก ใครเป็นคนคอยห้าม)`;
+
+    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวผู้เชี่ยวชาญด้านความสัมพันธ์ 🐾
+หน้าที่ของคุณคือ:
+1. รับบันทึกการคุย (Chat Log) ที่ส่งมา (มีรูปแบบ: [เวลา] ชื่อ [Reply to: ใคร]: ข้อความ)
+2. ${focusInstruction}
+3. สังเกตว่าใครตอบกลับใคร (Reply) และเวลาที่คุยกัน เพื่อวิเคราะห์ "จังหวะ" และ "ความใส่ใจ" ของแต่ละคน
+4. สรุปออกมาเป็นหัวข้อหรือรายชื่อที่อ่านง่ายและสนุกสนาน
+5. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)`;
+
+    try {
+        const response = await axios.post(
+            'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+            {
+                model: model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: `บันทึกการคุยดังนี้:\n${chatBlock}` }
+                ],
+                temperature: 0.5
+            },
+            { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 30000 }
+        );
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        throw new Error("งื้อออ ผมสรุปความสัมพันธ์ให้ไม่ได้เมี๊ยว...");
+    }
+}
+
 module.exports = { 
     getFortuneAI, 
     getChatAI, 
@@ -201,6 +242,7 @@ module.exports = {
     getInitialAI, 
     getRoleButtonAI, 
     getSummaryAI,
+    getRelationSummaryAI,
     getTranslateAI,
     generateImageAI
 };

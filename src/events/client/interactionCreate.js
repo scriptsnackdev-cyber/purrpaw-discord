@@ -24,7 +24,7 @@ module.exports = {
         }
 
         // 🛡️ ระบบ Anti-Spam สำหรับ Command เท่านั้น (ลด timeout จาก 800ms → 300ms สำหรับ button ให้ได้ response ไว)
-        if (interaction.isChatInputCommand()) {
+        if (interaction.isCommand()) {
             if (!interaction.client.interactionCooldowns) interaction.client.interactionCooldowns = new Map();
             const cooldownKey = `${interaction.user.id}-${interaction.commandName}`;
             const lastUsed = interaction.client.interactionCooldowns.get(cooldownKey) || 0;
@@ -64,7 +64,7 @@ module.exports = {
             }
 
             // 💾 1. จัดการกรณีเป็น Slash Command
-            if (interaction.isChatInputCommand()) {
+            if (interaction.isCommand()) {
                 const command = interaction.client.commands.get(interaction.commandName);
                 if (!command) return;
 
@@ -109,7 +109,7 @@ module.exports = {
             }
 
             // 🎵 2b. จัดการ Select Menu (เลือกเพลงขึ้นคิวแรก)
-            else if (interaction.isStringSelectMenu()) {
+            else if (interaction.isAnySelectMenu()) {
                 if (interaction.customId === 'music_queue_select') {
                     const queue = interaction.client.distube.getQueue(interaction.guildId);
                     if (!queue || queue.songs.length <= 1) {
@@ -136,19 +136,28 @@ module.exports = {
                     const isInvite = interaction.customId === 'private_room_invite_select';
                     const selectedUsers = interaction.values;
 
-                    if (!interaction.client.privateRoomConfirm) interaction.client.privateRoomConfirm = new Map();
-                    interaction.client.privateRoomConfirm.set(interaction.message.id, selectedUsers);
+                    await interaction.deferUpdate();
 
-                    const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`private_room_confirm:${isInvite ? 'invite' : 'kick'}`)
-                            .setLabel(`ยืนยัน${isInvite ? 'ชวนเพื่อน' : 'เตะเพื่อน'}`)
-                            .setStyle(isInvite ? ButtonStyle.Success : ButtonStyle.Danger)
-                    );
+                    for (const userId of selectedUsers) {
+                        if (userId === interaction.user.id) continue;
+                        try {
+                            if (isInvite) {
+                                await interaction.channel.permissionOverwrites.edit(userId, {
+                                    ViewChannel: true,
+                                    SendMessages: true,
+                                    ReadMessageHistory: true
+                                });
+                            } else {
+                                await interaction.channel.permissionOverwrites.delete(userId);
+                            }
+                        } catch (err) {
+                            console.error('Fast invite/kick permission error:', err);
+                        }
+                    }
 
-                    await interaction.update({
-                        content: `💡 คุณเลือกเพื่อน ${selectedUsers.length} คน: ${selectedUsers.map(id => `<@${id}>`).join(', ')}\n**กดปุ่มเพื่อยืนยันเมี๊ยว!🐾**`,
-                        components: [row]
+                    return interaction.editReply({
+                        content: `✅ ${isInvite ? 'เพิ่ม' : 'นำ'}เพื่อน ${selectedUsers.length} คน ${isInvite ? 'เข้าสู่' : 'ออกจาก'}ห้องเรียบร้อยแล้วเมี๊ยวว!🐾🌸`,
+                        components: []
                     });
                 }
                 // --- จัดการ Select Menu ของห้องเสียง ---
@@ -156,19 +165,33 @@ module.exports = {
                     const isInvite = interaction.customId === 'voice_room_invite_select';
                     const selectedUsers = interaction.values;
 
-                    if (!interaction.client.voiceRoomConfirm) interaction.client.voiceRoomConfirm = new Map();
-                    interaction.client.voiceRoomConfirm.set(interaction.message.id, selectedUsers);
+                    await interaction.deferUpdate();
 
-                    const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`voice_room_confirm:${isInvite ? 'invite' : 'kick'}`)
-                            .setLabel(`ยืนยัน${isInvite ? 'ชวนเพื่อน' : 'เตะเพื่อน'}`)
-                            .setStyle(isInvite ? ButtonStyle.Success : ButtonStyle.Danger)
-                    );
+                    for (const userId of selectedUsers) {
+                        if (userId === interaction.user.id) continue;
+                        try {
+                            if (isInvite) {
+                                await interaction.channel.permissionOverwrites.edit(userId, {
+                                    ViewChannel: true,
+                                    Connect: true,
+                                    Speak: true,
+                                    Stream: true
+                                });
+                            } else {
+                                await interaction.channel.permissionOverwrites.delete(userId);
+                                const targetMember = await interaction.guild.members.fetch(userId).catch(() => null);
+                                if (targetMember && targetMember.voice.channelId === interaction.channelId) {
+                                    await targetMember.voice.disconnect();
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Fast voice permission error:', err);
+                        }
+                    }
 
-                    await interaction.update({
-                        content: `💡 คุณเลือกเพื่อน ${selectedUsers.length} คน: ${selectedUsers.map(id => `<@${id}>`).join(', ')}\n**กดปุ่มเพื่อยืนยันเมี๊ยว!🐾**`,
-                        components: [row]
+                    return interaction.editReply({
+                        content: `✅ ${isInvite ? 'เพิ่ม' : 'นำ'}เพื่อน ${selectedUsers.length} คน ${isInvite ? 'เข้าสู่' : 'ออกจาก'}ห้องเรียบร้อยแล้วเมี๊ยวว!🐾🌸`,
+                        components: []
                     });
                 }
             }
@@ -199,6 +222,7 @@ module.exports = {
 
                 // --- ระบบ RPG Join ---
                 if (customId.startsWith('rpg_join:')) {
+                    await interaction.deferUpdate();
                     const sessionId = customId.split(':')[1];
                     const { data: session } = await supabase.from('rpg_sessions').select('*').eq('id', sessionId).single();
 
@@ -232,12 +256,14 @@ module.exports = {
 
                 // --- ระบบ RPG Action ---
                 else if (customId.startsWith('rpg_action:')) {
+                    await interaction.deferUpdate();
                     const [_, choice, sessionId] = customId.split(':');
                     return await handleRPGAction(interaction, choice, sessionId);
                 }
 
                 // --- ระบบ RPG Begin (Start Game from Lobby) ---
                 else if (customId.startsWith('rpg_begin:')) {
+                    await interaction.deferUpdate();
                     const sessionId = customId.split(':')[1];
                     const { startRPGGame } = require('../../utils/rpgManager');
                     // แจ้งว่ากำลังประมวลผล และลบปุ่มจาก Lobby ทันที
@@ -495,6 +521,9 @@ module.exports = {
                 else if (customId.startsWith('form_approve:')) {
                     const [_, formId, targetUserId] = customId.split(':');
                     if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+                    
+                    await interaction.deferUpdate();
+                    
                     const { data: form } = await supabase.from('forms').select('*').eq('id', formId).single();
                     const targetMember = await guild.members.fetch(targetUserId).catch(() => null);
                     if (targetMember) {
@@ -512,6 +541,9 @@ module.exports = {
                 // --- ปุ่มปฏิเสธฟอร์ม (แอดมิน) ---
                 else if (customId.startsWith('form_reject:')) {
                     if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: 'เฉพาะแอดมินเท่านั้นที่ใช้งานได้นะเมี๊ยว!🐾', flags: [MessageFlags.Ephemeral] });
+                    
+                    await interaction.deferUpdate();
+                    
                     const oldEmbed = interaction.message.embeds[0];
                     const newEmbed = EmbedBuilder.from(oldEmbed)
                         .setColor(0xEF4444)
@@ -774,10 +806,12 @@ module.exports = {
 
                 // --- ปุ่ม Invite / Kick ในห้องส่วนตัว ---
                 else if (customId === 'private_room_invite' || customId === 'private_room_kick') {
+                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                    
                     const { data: room } = await supabase.from('private_rooms').select('*').eq('channel_id', interaction.channelId).eq('is_deleted', false).single();
-                    if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องส่วนตัวนี้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+                    if (!room) return interaction.editReply({ content: '❌ ไม่พบข้อมูลห้องส่วนตัวนี้เมี๊ยว!' });
                     if (room.owner_id !== user.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
-                        return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องเท่านั้นที่ใช้ปุ่มนี้ได้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+                        return interaction.editReply({ content: '❌ เฉพาะเจ้าของห้องเท่านั้นที่ใช้ปุ่มนี้ได้เมี๊ยว!' });
                     }
 
                     const isInvite = customId === 'private_room_invite';
@@ -790,7 +824,7 @@ module.exports = {
                         .setMaxValues(5);
 
                     const selectRow = new ActionRowBuilder().addComponents(select);
-                    return interaction.reply({ content: isInvite ? '➕ เลือกเพื่อนที่ต้องการเพิ่มเข้าห้องเมี๊ยว:' : '➖ เลือกเพื่อนที่ต้องการนำออกจากห้องเมี๊ยว:', components: [selectRow], flags: [MessageFlags.Ephemeral] });
+                    return interaction.editReply({ content: isInvite ? '➕ เลือกเพื่อนที่ต้องการเพิ่มเข้าห้องเมี๊ยว:' : '➖ เลือกเพื่อนที่ต้องการนำออกจากห้องเมี๊ยว:', components: [selectRow] });
                 }
 
                 // --- ปุ่มลบฟอร์ม AI ส่วนตัว (แอดมินเท่านั้น) ---
@@ -838,8 +872,9 @@ module.exports = {
                     if (room.owner_id !== user.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
                         return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องหรือแอดมินเท่านั้นที่ปิดห้องได้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                     }
-
-                    await interaction.reply({ content: '🏠 กำลังปิดห้องและลบข้อมูล... ขอบคุณที่ใช้บริการนะเมี๊ยวว!🐾🌸' });
+                    
+                    await interaction.deferReply();
+                    await interaction.editReply({ content: '🏠 กำลังปิดห้องและลบข้อมูล... ขอบคุณที่ใช้บริการนะเมี๊ยวว!🐾🌸' });
 
                     // สั่งลบผ่าน Utility เมี๊ยว🐾
                     const { deletePrivateRoom } = require('../../utils/privateRoomCleanup');
@@ -972,10 +1007,12 @@ module.exports = {
 
                 // --- ปุ่ม Invite / Kick / Rename / Close ในห้องเสียง ---
                 else if (customId === 'voice_room_invite' || customId === 'voice_room_kick') {
+                    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+                    
                     const { data: room } = await supabase.from('voice_rooms').select('*').eq('channel_id', interaction.channelId).eq('is_deleted', false).single();
-                    if (!room) return interaction.reply({ content: '❌ ไม่พบข้อมูลห้องเสียงนี้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+                    if (!room) return interaction.editReply({ content: '❌ ไม่พบข้อมูลห้องเสียงนี้เมี๊ยว!' });
                     if (room.owner_id !== user.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
-                        return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องเท่านั้นที่ใช้ปุ่มนี้ได้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
+                        return interaction.editReply({ content: '❌ เฉพาะเจ้าของห้องเท่านั้นที่ใช้ปุ่มนี้ได้เมี๊ยว!' });
                     }
 
                     const isInvite = customId === 'voice_room_invite';
@@ -988,7 +1025,7 @@ module.exports = {
                         .setMaxValues(5);
 
                     const selectRow = new ActionRowBuilder().addComponents(select);
-                    return interaction.reply({ content: isInvite ? '➕ เลือกเพื่อนที่ต้องการเพิ่มเข้าห้องเมี๊ยว:' : '➖ เลือกเพื่อนที่ต้องการนำออกจากห้องเมี๊ยว:', components: [selectRow], flags: [MessageFlags.Ephemeral] });
+                    return interaction.editReply({ content: isInvite ? '➕ เลือกเพื่อนที่ต้องการเพิ่มเข้าห้องเมี๊ยว:' : '➖ เลือกเพื่อนที่ต้องการนำออกจากห้องเมี๊ยว:', components: [selectRow] });
                 }
 
                 else if (customId === 'voice_room_rename') {
@@ -1017,8 +1054,9 @@ module.exports = {
                     if (room.owner_id !== user.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
                         return interaction.reply({ content: '❌ เฉพาะเจ้าของห้องหรือแอดมินเท่านั้นที่ปิดห้องได้เมี๊ยว!', flags: [MessageFlags.Ephemeral] });
                     }
-
-                    await interaction.reply({ content: '🔊 กำลังปิดห้องเสียงและลบข้อมูล... ขอบคุณที่ใช้บริการนะเมี๊ยวว!🐾🌸' });
+                    
+                    await interaction.deferReply();
+                    await interaction.editReply({ content: '🔊 กำลังปิดห้องเสียงและลบข้อมูล... ขอบคุณที่ใช้บริการนะเมี๊ยวว!🐾🌸' });
                     const { deleteVoiceRoom } = require('../../utils/voiceRoomCleanup');
                     await deleteVoiceRoom(interaction.client, room);
                 }
@@ -1168,9 +1206,9 @@ module.exports = {
                     await interaction.deferUpdate(); // 🚀 รับเรื่องทันทีป้องกัน Timeout เมี๊ยว🐾
 
                     const embed = new EmbedBuilder()
-                        .setTitle('📋 สรุปความเคลื่อนไหวในห้องนี้เมี๊ยวว! 🐾')
+                        .setTitle(cached.title || '📋 สรุปความเคลื่อนไหวในห้องนี้เมี๊ยวว! 🐾')
                         .setDescription(cached.content)
-                        .setColor('#FFB6C1')
+                        .setColor(cached.title?.includes('ความสัมพันธ์') ? '#8B5CF6' : '#FFB6C1')
                         .setThumbnail(interaction.client.user.displayAvatarURL())
                         .setFooter({ text: `สรุปโดย PurrPaw AI (ย้อนหลัง ${cached.limit} ข้อความ) 🐈✨` })
                         .setTimestamp();

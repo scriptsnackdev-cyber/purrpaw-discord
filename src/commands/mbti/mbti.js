@@ -130,36 +130,39 @@ async function startTest(interaction) {
     });
 
     collector.on('collect', async (i) => {
-        const parts = i.customId.split(':');
-        const qIdx = Number(parts[1]);
-        const optIdx = Number(parts[2]);
-        const q = QUESTIONS[qIdx];
-        const opt = q.options[optIdx];
+        try {
+            // 🛑 Acknowledge interaction ทันทีเพื่อเลี่ยง Timeout 3s เมี๊ยว🐾
+            await i.deferUpdate();
 
-        // สะสมคะแนนแบบ weighted (+2, +1, -1, -2)
-        scores[q.dim] += opt.val;
-        currentIdx++;
+            const parts = i.customId.split(':');
+            const qIdx = Number(parts[1]);
+            const optIdx = Number(parts[2]);
+            const q = QUESTIONS[qIdx];
+            const opt = q.options[optIdx];
 
-        if (currentIdx < QUESTIONS.length) {
-            await i.update({
-                embeds: [getEmbed(currentIdx)],
-                components: getRows(currentIdx)
-            });
-        } else {
-            // คำนวณผลลัพธ์: ถ้า score > 0 จะได้ตัวอักษรแรก (E/S/T/J) ถ้า <= 0 จะได้ตัวตรงข้าม (I/N/F/P)
-            // การใช้ > 0 แทน >= 0 เพื่อช่วยลด bias ที่คนมักจะได้ Sensing ทั้งที่เป็น Intuition (เพราะ 0 จะกลายเป็น N)
-            const mbti = [
-                scores.E > 0 ? 'E' : 'I',
-                scores.S > 0 ? 'S' : 'N',
-                scores.T > 0 ? 'T' : 'F',
-                scores.J > 0 ? 'J' : 'P'
-            ].join('');
+            // สะสมคะแนนแบบ weighted (+2, +1, -1, -2)
+            scores[q.dim] += opt.val;
+            currentIdx++;
 
-            await i.update({
-                content: `🐾 **ประมวลผลเสร็จแล้วเมี๊ยว!** กำลังสรุปผลลัพธ์สักครู่... 🕯️`,
-                embeds: [],
-                components: []
-            });
+            if (currentIdx < QUESTIONS.length) {
+                await i.editReply({
+                    embeds: [getEmbed(currentIdx)],
+                    components: getRows(currentIdx)
+                });
+            } else {
+                // คำนวณผลลัพธ์: ถ้า score > 0 จะได้ตัวอักษรแรก (E/S/T/J) ถ้า <= 0 จะได้ตัวตรงข้าม (I/N/F/P)
+                const mbti = [
+                    scores.E > 0 ? 'E' : 'I',
+                    scores.S > 0 ? 'S' : 'N',
+                    scores.T > 0 ? 'T' : 'F',
+                    scores.J > 0 ? 'J' : 'P'
+                ].join('');
+
+                await i.editReply({
+                    content: `🐾 **ประมวลผลเสร็จแล้วเมี๊ยว!** กำลังสรุปผลลัพธ์สักครู่... 🕯️`,
+                    embeds: [],
+                    components: []
+                });
 
             // 📝 บันทึกผลลงฐานข้อมูล (Global Profile) เมี๊ยว🐾
             await supabase.from('user_profiles').upsert({
@@ -204,7 +207,11 @@ async function startTest(interaction) {
 
             collector.stop();
         }
-    });
+    } catch (error) {
+        if (error.code === 10062) return; // Silent on Unknown Interaction
+        console.error('[MBTI Collector Error]:', error);
+    }
+});
 
     collector.on('end', (collected, reason) => {
         if (reason === 'time') {

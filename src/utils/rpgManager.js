@@ -86,26 +86,32 @@ async function startRPGGame(interaction, channelId, userId) {
 async function handleRPGAction(interaction, actionValue, sessionId) {
     const userId = interaction.user.id;
 
+    // 🚀 ยืนยันการรับเรื่องทันทีเพื่อป้องกัน Timeout เมี๊ยว🐾
+    await interaction.deferUpdate().catch(() => { });
+
     const { data: session, error: sessionError } = await supabase
         .from('rpg_sessions')
         .select('*')
         .eq('id', sessionId)
         .single();
 
-    if (sessionError || !session) return interaction.reply({ content: '❌ ไม่พบข้อมูลการผจญภัยนี้', ephemeral: true });
+    if (sessionError || !session) {
+        const msg = '❌ ไม่พบข้อมูลการผจญภัยนี้';
+        return interaction.editReply({ content: msg, components: [] }).catch(() => { });
+    }
     
     if (actionValue === 'STOP') {
         if (session.creator_id !== userId && !interaction.member.permissions.has('Administrator')) {
-            return interaction.reply({ content: '❌ เฉพาะหัวหน้าปาร์ตี้หรือแอดมินเท่านั้นที่สั่งจบได้!', ephemeral: true });
+            return interaction.followUp({ content: '❌ เฉพาะหัวหน้าปาร์ตี้หรือแอดมินเท่านั้นที่สั่งจบได้!', ephemeral: true });
         }
         return await endRPGGame(interaction, session);
     }
 
-    if (session.status !== 'active') return interaction.reply({ content: '❌ การผจญภัยนี้จบไปแล้ว', ephemeral: true });
+    if (session.status !== 'active') return interaction.followUp({ content: '❌ การผจญภัยนี้จบไปแล้ว', ephemeral: true });
 
     const players = session.players || [];
     const currentPlayer = players.find(p => p.id === userId);
-    if (!currentPlayer) return interaction.reply({ content: '❌ คุณไม่ได้อยู่ในปาร์ตี้นี้นะ!', ephemeral: true });
+    if (!currentPlayer) return interaction.followUp({ content: '❌ คุณไม่ได้อยู่ในปาร์ตี้นี้นะ!', ephemeral: true });
 
     const { data: existingAction } = await supabase
         .from('rpg_actions')
@@ -115,7 +121,7 @@ async function handleRPGAction(interaction, actionValue, sessionId) {
         .eq('round_number', session.current_round)
         .single();
 
-    if (existingAction) return interaction.reply({ content: '❌ คุณเลือกไปแล้วในรอบนี้ รอเพื่อนๆ ก่อนนะ', ephemeral: true });
+    if (existingAction) return interaction.followUp({ content: '❌ คุณเลือกไปแล้วในรอบนี้ รอเพื่อนๆ ก่อนนะ', ephemeral: true });
 
     const button = interaction.message.components[0].components.find(c => c.customId === interaction.customId);
     const buttonLabel = button ? button.label : actionValue;

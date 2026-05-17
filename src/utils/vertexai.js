@@ -158,12 +158,21 @@ async function getChatAI(messages, signal = null) {
 
 async function checkShouldRespondAI(recentHistory, botNames, userNames, signal = null) {
     const rawModel = process.env.PRECHECK_MODEL || process.env.VERTEX_PRECHECK_MODEL || 'gemini-1.5-flash';
-    const safetySettings = [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
-    ];
+    const modelName = cleanModelName(rawModel);
+    const systemPrompt = `You are a conversation analyzer for a multi-persona AI chat system.
+Your task is to analyze the provided chat history and determine which of the available AI personas should respond to the latest message.
+
+[AVAILABLE PERSONAS]
+${botNames.join(', ')}
+
+[USER NAMES]
+${userNames.join(', ')}
+
+[RULES]
+- Only select a persona if they are directly mentioned, replied to, or if the context highly suggests they should speak.
+- Respond ONLY with the selected persona names in the following XML format:
+<persona name="PersonaName">Yes</persona>
+- If no one should respond, return an empty response.`;
 
     const model = vertexAI.getGenerativeModel({ 
         model: modelName,
@@ -190,6 +199,9 @@ async function checkShouldRespondAI(recentHistory, botNames, userNames, signal =
 
 async function getInitialAI(userPrompt, guildName = "Unknown Server") {
     const rawModel = process.env.INITIAL_MODEL || process.env.VERTEX_INITIAL_MODEL || 'gemini-1.5-flash';
+    const modelName = cleanModelName(rawModel);
+    const systemPrompt = `คุณคือสถาปนิกออกแบบ Discord Server มืออาชีพ...`;
+    
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
@@ -214,6 +226,9 @@ async function getInitialAI(userPrompt, guildName = "Unknown Server") {
 
 async function getRoleButtonAI(userPrompt) {
     const rawModel = process.env.ROLE_MODEL || process.env.VERTEX_ROLE_MODEL || 'gemini-1.5-flash';
+    const modelName = cleanModelName(rawModel);
+    const systemPrompt = `คุณคือผู้ช่วยออกแบบระบบ Role ใน Discord...`;
+
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
@@ -238,6 +253,14 @@ async function getRoleButtonAI(userPrompt) {
 
 async function getSummaryAI(chatBlock) {
     const rawModel = process.env.SUMMARY_MODEL || process.env.VERTEX_SUMMARY_MODEL || 'gemini-1.5-flash';
+    const modelName = cleanModelName(rawModel);
+    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวสรุปความฉลาดปราดเปรื่อง 🐾
+หน้าที่ของคุณคือ:
+1. รับบันทึกการคุย (Chat Log) ที่ส่งมา
+2. สรุปเหตุการณ์ที่เกิดขึ้นว่าใครทำอะไร ที่ไหน อย่างไร
+3. สรุปเป็นข้อๆ ให้เข้าใจง่าย สั้นกระชับ
+4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)`;
+
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
@@ -262,6 +285,16 @@ async function getSummaryAI(chatBlock) {
 
 async function getTranslateAI(chatBlock) {
     const rawModel = process.env.SUMMARY_MODEL || process.env.VERTEX_SUMMARY_MODEL || 'gemini-1.5-flash';
+    const modelName = cleanModelName(rawModel);
+    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวนักแปลภาษาผู้รอบรู้ 🐾
+หน้าที่ของคุณคือ:
+1. รับบันทึกการคุย (Chat Log) ที่ส่งมา
+2. แปลบทสนทนานั้นให้เป็นภาษาไทย (หากเป็นภาษาไทยอยู่แล้ว ให้ขัดเกลาให้สละสลวยขึ้น)
+3. คงรูปแบบ "User: Message" เอาไว้เพื่อให้รู้ว่าใครพูดอะไร
+4. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)
+5. สรุปใจความสำคัญสั้นๆ ทิ้งท้ายหากบทสนทนายาวเกินไปเมี๊ยว!
+6. ห้ามใช้เครื่องหมาย @ หรือทำการ Tag ชื่อผู้ใช้เด็ดขาด ให้ใช้ชื่อธรรมดาเท่านั้น เพื่อป้องกันการแจ้งเตือนรบกวนเมี๊ยว!`;
+
     const safetySettings = [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
@@ -365,6 +398,50 @@ Description of the new scene: ${prompt}`;
     }
 }
 
+async function getRelationSummaryAI(chatBlock, targetName = null) {
+    const rawModel = process.env.SUMMARY_MODEL || process.env.VERTEX_SUMMARY_MODEL || 'gemini-1.5-flash';
+    const modelName = cleanModelName(rawModel);
+    
+    let focusInstruction = targetName 
+        ? `วิเคราะห์ความสัมพันธ์ระหว่าง "${targetName}" กับผู้คนในแชทนี้ "ทุกคน" ที่มีการปฏิสัมพันธ์กัน (Interact) 🐾
+           กรุณาสรุปแยกเป็นรายบุคคลให้ครบถ้วนทุกคนที่ปรากฏในแชทและมีการคุยกับ ${targetName} หรือถูก ${targetName} พูดถึง
+           โดยระบุ:
+           - ชื่อผู้ที่ปฏิสัมพันธ์
+           - ลักษณะความสัมพันธ์ (สนิทกัน, แกล้งกัน, จีบกัน, ไม่ถูกกัน ฯลฯ)
+           - บรรยากาศการคุยที่เกิดขึ้น
+           (สรุปให้สนุกสนาน น่าติดตาม และครบทุกคนที่มีการ Interact กันจริงๆ เมี๊ยว!)`
+        : `วิเคราะห์ความสัมพันธ์ภาพรวมระหว่างผู้คนในแชท (ใครสนิทกับใคร ใครชอบแกล้งใคร ใครเป็นหัวโจก ใครเป็นคนคอยห้าม)`;
+
+    const systemPrompt = `คุณคือ "PurrPaw" บอทแมวผู้เชี่ยวชาญด้านความสัมพันธ์ 🐾
+หน้าที่ของคุณคือ:
+1. รับบันทึกการคุย (Chat Log) ที่ส่งมา (มีรูปแบบ: [เวลา] ชื่อ [Reply to: ใคร]: ข้อความ)
+2. ${focusInstruction}
+3. สังเกตว่าใครตอบกลับใคร (Reply) และเวลาที่คุยกัน เพื่อวิเคราะห์ "จังหวะ" และ "ความใส่ใจ" ของแต่ละคน
+4. สรุปออกมาเป็นหัวข้อหรือรายชื่อที่อ่านง่ายและสนุกสนาน
+5. ใช้โทนเสียงที่น่ารัก เป็นกันเอง และแฝงความขี้อ้อนแบบแมว (มีเมี๊ยว🐾 ต่อท้ายได้)`;
+
+    const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+    ];
+
+    const model = vertexAI.getGenerativeModel({ 
+        model: modelName,
+        systemInstruction: systemPrompt,
+        safetySettings
+    });
+
+    try {
+        const result = await model.generateContent(`บันทึกการคุยดังนี้:\n${chatBlock}`);
+        return result.response.candidates[0].content.parts[0].text;
+    } catch (error) {
+        console.error('Vertex Relation Summary AI Error:', error);
+        throw new Error("งื้อออ ผมสรุปความสัมพันธ์ให้ไม่ได้เมี๊ยว...");
+    }
+}
+
 module.exports = { 
     getFortuneAI, 
     getChatAI, 
@@ -372,6 +449,7 @@ module.exports = {
     getInitialAI, 
     getRoleButtonAI, 
     getSummaryAI,
+    getRelationSummaryAI,
     getTranslateAI,
     generateImageAI
 };
